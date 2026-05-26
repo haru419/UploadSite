@@ -6,6 +6,8 @@
 
 <title>UploadSite</title>
 
+<link rel="icon" href="data:,">
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <style>
@@ -75,6 +77,7 @@ text-align:center;
 margin-bottom:20px;
 transition:.2s;
 background:#111827;
+cursor:pointer;
 }
 
 #drop.drag{
@@ -96,6 +99,7 @@ display:none;
 height:100%;
 width:0%;
 background:#5865f2;
+transition:.2s;
 }
 
 #gallery{
@@ -135,6 +139,12 @@ margin-top:10px;
 width:35px;
 height:35px;
 border-radius:50%;
+}
+
+.empty{
+opacity:.6;
+text-align:center;
+padding:50px;
 }
 
 @keyframes fade{
@@ -202,10 +212,13 @@ Discordログイン
 
 <script>
 
-const supabaseUrl = "https://dnzxeiukhdcysqxtvcab.supabase.co/";
-const supabaseKey = "sb_publishable_p1-D04hIexKwLQoprjW1Ww_PWyzW8Ra";
+const supabaseUrl =
+"https://dnzxeiukhdcysqxtvcab.supabase.co";
 
-const supabase =
+const supabaseKey =
+"ここにPublishableKey";
+
+const client =
 window.supabase.createClient(
 supabaseUrl,
 supabaseKey
@@ -217,13 +230,14 @@ async function checkUser(){
 
 const {
 data:{session}
-} = await supabase.auth.getSession();
+} = await client.auth.getSession();
 
 if(session){
 
 currentUser = session.user;
 
-document.getElementById("loginBtn").innerText =
+document.getElementById("loginBtn")
+.innerText =
 session.user.user_metadata.full_name;
 
 }
@@ -232,11 +246,27 @@ session.user.user_metadata.full_name;
 
 checkUser();
 
+client.auth.onAuthStateChange(
+(event,session)=>{
+
+if(session){
+
+currentUser = session.user;
+
+document.getElementById("loginBtn")
+.innerText =
+session.user.user_metadata.full_name;
+
+}
+
+}
+);
+
 document
 .getElementById("loginBtn")
 .onclick = async ()=>{
 
-await supabase.auth.signInWithOAuth({
+await client.auth.signInWithOAuth({
 provider:"discord"
 });
 
@@ -266,9 +296,11 @@ e.preventDefault();
 
 drop.classList.remove("drag");
 
-const file = e.dataTransfer.files[0];
+const file =
+e.dataTransfer.files[0];
 
 uploadFile(file);
+
 });
 
 fileInput.addEventListener("change",(e)=>{
@@ -279,8 +311,9 @@ async function uploadFile(file){
 
 if(!currentUser){
 
-alert("ログインしてください");
+alert("Discordログインしてください");
 return;
+
 }
 
 if(!file) return;
@@ -288,24 +321,25 @@ if(!file) return;
 const fileName =
 Date.now()+"_"+file.name;
 
-document.getElementById("progressBox")
+document
+.getElementById("progressBox")
 .style.display = "block";
 
 const progress =
 document.getElementById("progress");
 
-progress.style.width = "10%";
+progress.style.width = "20%";
 
 const {
-data,
-error
-} = await supabase.storage
+error:uploadError
+} = await client.storage
 .from("uploads")
 .upload(fileName,file);
 
-if(error){
+if(uploadError){
 
-alert(error.message);
+alert(uploadError.message);
+
 return;
 
 }
@@ -314,19 +348,24 @@ progress.style.width = "70%";
 
 const {
 data:urlData
-} = supabase.storage
+} = client.storage
 .from("uploads")
 .getPublicUrl(fileName);
 
+const imageUrl =
+urlData.publicUrl;
+
 progress.style.width = "90%";
 
-await supabase
+const {
+error:dbError
+} = await client
 .from("posts")
 .insert([{
 
 title:file.name,
 
-image_url:urlData.publicUrl,
+image_url:imageUrl,
 
 user_name:
 currentUser.user_metadata.full_name,
@@ -339,12 +378,24 @@ currentUser.id
 
 }]);
 
+if(dbError){
+
+alert(dbError.message);
+
+return;
+
+}
+
 progress.style.width = "100%";
 
 setTimeout(()=>{
+
 progress.style.width = "0%";
-document.getElementById("progressBox")
+
+document
+.getElementById("progressBox")
 .style.display = "none";
+
 },500);
 
 loadPosts();
@@ -354,11 +405,20 @@ loadPosts();
 async function loadPosts(){
 
 const {
-data
-} = await supabase
+data,
+error
+} = await client
 .from("posts")
 .select("*")
 .order("created_at",{ascending:false});
+
+if(error){
+
+console.log(error);
+
+return;
+
+}
 
 renderPosts(data);
 
@@ -370,19 +430,32 @@ const gallery =
 document.getElementById("gallery");
 
 const search =
-document.getElementById("search")
+document
+.getElementById("search")
 .value
 .toLowerCase();
 
 gallery.innerHTML = "";
 
-posts
-.filter(post=>
+const filtered =
+posts.filter(post=>
 post.title
 .toLowerCase()
 .includes(search)
-)
-.forEach(post=>{
+);
+
+if(filtered.length === 0){
+
+gallery.innerHTML =
+`<div class="empty">
+投稿がありません
+</div>`;
+
+return;
+
+}
+
+filtered.forEach(post=>{
 
 gallery.innerHTML += `
 
