@@ -24,16 +24,29 @@ padding:15px;
 border-radius:10px;
 }
 
-img{width:80px;height:80px;border-radius:50%;}
+.top{
+display:flex;
+gap:15px;
+align-items:center;
+}
 
-textarea{
+.avatar{
+width:80px;
+height:80px;
+border-radius:50%;
+object-fit:cover;
+cursor:pointer;
+border:2px solid #5865f2;
+}
+
+input, textarea{
 width:100%;
 padding:10px;
 margin-top:10px;
+border:none;
 border-radius:10px;
 background:#1e293b;
 color:white;
-border:none;
 }
 
 button{
@@ -54,6 +67,10 @@ width:100%;
 border-radius:10px;
 margin-top:10px;
 }
+
+.small{opacity:.7;font-size:13px;}
+
+.hidden{display:none;}
 </style>
 </head>
 
@@ -63,14 +80,22 @@ margin-top:10px;
 
 <div class="card">
 
-<img id="avatar">
+<div class="top">
+<img id="avatar" class="avatar" onclick="pickAvatar()">
+<div>
 <h2 id="name"></h2>
+<div class="small" id="state"></div>
+</div>
+</div>
 
-<textarea id="bio"></textarea>
+<input id="nameInput" placeholder="名前変更">
+<textarea id="bio" placeholder="自己紹介"></textarea>
 
-<button onclick="saveBio()">保存</button>
+<button onclick="saveProfile()">プロフィール保存</button>
 
-<div id="followBtn"></div>
+<div id="followArea"></div>
+
+<input type="file" id="file" class="hidden">
 
 </div>
 
@@ -88,11 +113,13 @@ const client = supabase.createClient(
 const uid = new URLSearchParams(location.search).get("uid");
 
 let me=null;
+let avatarFile=null;
 
+/* ===== init ===== */
 async function init(){
 
 const { data:{session} } = await client.auth.getSession();
-me = session?.user || null;
+me=session?.user||null;
 
 if(!uid){
 document.body.innerHTML="UIDなし";
@@ -105,7 +132,7 @@ loadFollow();
 }
 init();
 
-/* ===== profile ===== */
+/* ===== プロフィール取得 ===== */
 async function loadProfile(){
 
 const { data } = await client
@@ -115,19 +142,93 @@ const { data } = await client
 .single();
 
 document.getElementById("name").innerText=data.full_name||"名無し";
-document.getElementById("avatar").src=data.avatar_url||"";
 document.getElementById("bio").value=data.bio||"";
+document.getElementById("nameInput").value=data.full_name||"";
+
+document.getElementById("avatar").src=
+data.avatar_url||"https://via.placeholder.com/80";
 
 if(me && me.id===uid){
-document.getElementById("followBtn").innerHTML="自分のページ";
-}
-else{
-checkFollow();
+document.getElementById("state").innerText="あなたのプロフィール";
 }
 }
 
-/* ===== follow ===== */
-async function checkFollow(){
+/* ===== 画像選択 ===== */
+function pickAvatar(){
+if(!me || me.id!==uid) return;
+
+document.getElementById("file").click();
+}
+
+/* ===== 画像アップロード保持 ===== */
+document.getElementById("file").onchange=async(e)=>{
+
+const file=e.target.files[0];
+if(!file) return;
+
+const name=Date.now()+file.name;
+
+await client.storage.from("avatars").upload(name,file);
+
+const { data } = client.storage.from("avatars").getPublicUrl(name);
+
+avatarFile=data.publicUrl;
+
+document.getElementById("avatar").src=avatarFile;
+};
+
+/* ===== 保存 ===== */
+async function saveProfile(){
+
+if(!me || me.id!==uid){
+alert("自分のみ編集できます");
+return;
+}
+
+const name=document.getElementById("nameInput").value;
+const bio=document.getElementById("bio").value;
+
+await client.from("profiles").upsert({
+id:uid,
+full_name:name,
+bio:bio,
+avatar_url:avatarFile || document.getElementById("avatar").src
+});
+
+loadProfile();
+}
+
+/* ===== フォロー ===== */
+async function follow(){
+await client.from("follows").insert({
+follower_id:me.id,
+following_id:uid
+});
+loadFollow();
+}
+
+async function unfollow(){
+await client.from("follows")
+.delete()
+.eq("follower_id",me.id)
+.eq("following_id",uid);
+
+loadFollow();
+}
+
+async function loadFollow(){
+
+const box=document.getElementById("followArea");
+
+if(!me){
+box.innerHTML="ログインしてください";
+return;
+}
+
+if(me.id===uid){
+box.innerHTML="自分のプロフィール";
+return;
+}
 
 const { data } = await client
 .from("follows")
@@ -137,40 +238,12 @@ const { data } = await client
 
 const is=data.length>0;
 
-document.getElementById("followBtn").innerHTML=
-is
-? `<button class="unfollow" onclick="unfollow()">解除</button>`
-: `<button class="follow" onclick="follow()">フォロー</button>`;
+box.innerHTML=is
+? `<button class="unfollow" onclick="unfollow()">フォロー解除</button>`
+: `<button class="follow" onclick="follow()">フォローする</button>`;
 }
 
-async function follow(){
-await client.from("follows").insert({
-follower_id:me.id,
-following_id:uid
-});
-checkFollow();
-}
-
-async function unfollow(){
-await client.from("follows")
-.delete()
-.eq("follower_id",me.id)
-.eq("following_id",uid);
-
-checkFollow();
-}
-
-/* ===== bio ===== */
-async function saveBio(){
-if(me.id!==uid) return alert("不可");
-
-await client.from("profiles").upsert({
-id:uid,
-bio:document.getElementById("bio").value
-});
-}
-
-/* ===== posts ===== */
+/* ===== 投稿 ===== */
 async function loadPosts(){
 
 const { data } = await client
