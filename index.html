@@ -11,7 +11,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <style>
-
+/* ======（CSSはそのままなので省略せず全部維持）====== */
 *{
 margin:0;
 padding:0;
@@ -35,9 +35,7 @@ gap:10px;
 flex-wrap:wrap;
 }
 
-h1{
-font-size:32px;
-}
+h1{font-size:32px;}
 
 .top-right{
 display:flex;
@@ -56,9 +54,7 @@ font-size:15px;
 transition:.2s;
 }
 
-button:hover{
-transform:scale(1.05);
-}
+button:hover{transform:scale(1.05);}
 
 input{
 padding:12px;
@@ -124,9 +120,7 @@ object-fit:cover;
 display:block;
 }
 
-.info{
-padding:15px;
-}
+.info{padding:15px;}
 
 .user{
 display:flex;
@@ -152,6 +146,7 @@ color:white;
 text-decoration:none;
 transition:.2s;
 font-weight:bold;
+cursor:pointer;
 }
 
 .downloadBtn:hover{
@@ -166,405 +161,236 @@ padding:50px;
 }
 
 @keyframes fade{
-from{
-opacity:0;
-transform:translateY(10px);
-}
-to{
-opacity:1;
-transform:none;
-}
+from{opacity:0;transform:translateY(10px);}
+to{opacity:1;transform:none;}
 }
 
 @media(max-width:600px){
-
-input{
-width:100%;
+input{width:100%;}
+header{flex-direction:column;align-items:stretch;}
+.top-right{flex-direction:column;}
 }
-
-header{
-flex-direction:column;
-align-items:stretch;
-}
-
-.top-right{
-flex-direction:column;
-}
-
-}
-
 </style>
 </head>
+
 <body>
 
 <header>
-
 <h1>UploadSite</h1>
 
 <div class="top-right">
-
-<input
-type="text"
-id="search"
-placeholder="検索">
-
-<button id="loginBtn">
-Discordログイン
-</button>
-
+<input type="text" id="search" placeholder="検索">
+<button id="loginBtn">Discordログイン</button>
 </div>
-
 </header>
 
 <div id="drop">
-
 <h2>ドラッグ&ドロップ</h2>
+<p>またはクリックして画像を選択</p>
 
-<p>
-またはクリックして画像を選択
-</p>
-
-<input
-type="file"
-id="fileInput"
-hidden
-accept="image/*">
+<input type="file" id="fileInput" hidden accept="image/*">
 
 <div id="progressBox">
 <div id="progress"></div>
 </div>
-
 </div>
 
 <div id="gallery"></div>
 
 <script>
+const supabaseUrl = "https://dnzxeiukhdcysqxtvcab.supabase.co";
+const supabaseKey = "sb_publishable_p1-D04hIexKwLQoprjW1Ww_PWyzW8Ra";
 
-const supabaseUrl =
-"https://dnzxeiukhdcysqxtvcab.supabase.co";
-
-const supabaseKey =
-"sb_publishable_p1-D04hIexKwLQoprjW1Ww_PWyzW8Ra";
-
-const client =
-window.supabase.createClient(
-supabaseUrl,
-supabaseKey
-);
+const client = window.supabase.createClient(supabaseUrl, supabaseKey);
 
 let currentUser = null;
 
 async function checkUser(){
-
-const {
-data:{session}
-} = await client.auth.getSession();
+const { data:{session} } = await client.auth.getSession();
 
 if(session){
-
 currentUser = session.user;
-
-document
-.getElementById("loginBtn")
-.innerText =
+document.getElementById("loginBtn").innerText =
 session.user.user_metadata.full_name;
-
 }
-
 }
-
 checkUser();
 
-client.auth.onAuthStateChange(
-(event,session)=>{
-
+client.auth.onAuthStateChange((event,session)=>{
 if(session){
-
 currentUser = session.user;
-
-document
-.getElementById("loginBtn")
-.innerText =
+document.getElementById("loginBtn").innerText =
 session.user.user_metadata.full_name;
-
 }
-
-}
-);
-
-document
-.getElementById("loginBtn")
-.onclick = async ()=>{
-
-await client.auth.signInWithOAuth({
-
-provider:"discord",
-
-options:{
-redirectTo:
-"https://haru419.github.io/UploadSite/"
-}
-
 });
 
+document.getElementById("loginBtn").onclick = async ()=>{
+await client.auth.signInWithOAuth({
+provider:"discord",
+options:{
+redirectTo:"https://haru419.github.io/UploadSite/"
+}
+});
 };
 
-const drop =
-document.getElementById("drop");
+const drop = document.getElementById("drop");
+const fileInput = document.getElementById("fileInput");
 
-const fileInput =
-document.getElementById("fileInput");
-
-drop.onclick = ()=>{
-fileInput.click();
-};
+drop.onclick = ()=> fileInput.click();
 
 drop.addEventListener("dragover",(e)=>{
-
 e.preventDefault();
-
 drop.classList.add("drag");
-
 });
 
 drop.addEventListener("dragleave",()=>{
-
 drop.classList.remove("drag");
-
 });
 
 drop.addEventListener("drop",(e)=>{
-
 e.preventDefault();
-
 drop.classList.remove("drag");
-
-const file =
-e.dataTransfer.files[0];
-
-uploadFile(file);
-
+uploadFile(e.dataTransfer.files[0]);
 });
 
 fileInput.addEventListener("change",(e)=>{
-
 uploadFile(e.target.files[0]);
-
 });
 
 async function uploadFile(file){
-
 if(!currentUser){
-
 alert("Discordログインしてください");
-
 return;
-
 }
 
-if(!file) return;
+const ext = file.name.split(".").pop();
+const fileName = Date.now() + "." + ext;
 
-const ext =
-file.name.split(".").pop();
-
-const fileName =
-Date.now() + "." + ext;
-
-document
-.getElementById("progressBox")
-.style.display = "block";
-
-const progress =
-document.getElementById("progress");
+document.getElementById("progressBox").style.display = "block";
+const progress = document.getElementById("progress");
 
 progress.style.width = "20%";
 
-const {
-error:uploadError
-} = await client.storage
+const { error:uploadError } = await client.storage
 .from("uploads")
 .upload(fileName,file);
 
 if(uploadError){
-
 alert(uploadError.message);
-
 return;
-
 }
 
 progress.style.width = "70%";
 
-const {
-data:urlData
-} = client.storage
+const { data:urlData } = client.storage
 .from("uploads")
 .getPublicUrl(fileName);
 
-const imageUrl =
-urlData.publicUrl;
+const imageUrl = urlData.publicUrl;
 
 progress.style.width = "90%";
 
-const {
-error:dbError
-} = await client
+const { error:dbError } = await client
 .from("posts")
 .insert([{
-
 title:file.name,
-
 image_url:imageUrl,
-
-user_name:
-currentUser.user_metadata.full_name,
-
-user_avatar:
-currentUser.user_metadata.avatar_url,
-
-user_id:
-currentUser.id
-
+user_name:currentUser.user_metadata.full_name,
+user_avatar:currentUser.user_metadata.avatar_url,
+user_id:currentUser.id
 }]);
 
 if(dbError){
-
 alert(dbError.message);
-
 return;
-
 }
 
 progress.style.width = "100%";
 
 setTimeout(()=>{
-
 progress.style.width = "0%";
-
-document
-.getElementById("progressBox")
-.style.display = "none";
-
+document.getElementById("progressBox").style.display = "none";
 },500);
 
 loadPosts();
+}
 
+async function downloadImage(url, filename){
+const res = await fetch(url);
+const blob = await res.blob();
+
+const blobUrl = window.URL.createObjectURL(blob);
+
+const a = document.createElement("a");
+a.href = blobUrl;
+a.download = filename || "download.jpg";
+document.body.appendChild(a);
+a.click();
+a.remove();
+
+window.URL.revokeObjectURL(blobUrl);
 }
 
 async function loadPosts(){
-
-const {
-data,
-error
-} = await client
+const { data, error } = await client
 .from("posts")
 .select("*")
-.order(
-"created_at",
-{ascending:false}
-);
+.order("created_at",{ascending:false});
 
 if(error){
-
 console.log(error);
-
 return;
-
 }
 
 renderPosts(data);
-
 }
 
 function renderPosts(posts){
 
-const gallery =
-document.getElementById("gallery");
-
-const search =
-document
-.getElementById("search")
-.value
-.toLowerCase();
+const gallery = document.getElementById("gallery");
+const search = document.getElementById("search").value.toLowerCase();
 
 gallery.innerHTML = "";
 
-const filtered =
-posts.filter(post=>
-post.title
-.toLowerCase()
-.includes(search)
+const filtered = posts.filter(post =>
+post.title.toLowerCase().includes(search)
 );
 
 if(filtered.length === 0){
-
-gallery.innerHTML = `
-
-<div class="empty">
-投稿がありません
-</div>
-
-`;
-
+gallery.innerHTML = `<div class="empty">投稿がありません</div>`;
 return;
-
 }
 
 filtered.forEach(post=>{
-
 gallery.innerHTML += `
-
 <div class="card">
 
-<a
-href="${post.image_url}"
-target="_blank"
->
-
+<a href="${post.image_url}" target="_blank">
 <img src="${post.image_url}">
-
 </a>
 
 <div class="info">
-
 <h3>${post.title}</h3>
 
 <div class="user">
-
 <img src="${post.user_avatar}">
-
 <span>${post.user_name}</span>
-
 </div>
 
-<a
-href="${post.image_url}"
-download
-target="_blank"
-class="downloadBtn"
->
+<button class="downloadBtn"
+onclick="downloadImage('${post.image_url}','${post.title}')">
 ダウンロード
-</a>
+</button>
 
 </div>
-
 </div>
-
 `;
-
 });
-
 }
 
-document
-.getElementById("search")
-.addEventListener(
-"input",
-loadPosts
-);
+document.getElementById("search").addEventListener("input",loadPosts);
 
 loadPosts();
-
 </script>
 
 </body>
