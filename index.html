@@ -45,6 +45,10 @@ transition:.2s;
 
 button:hover{transform:scale(1.05);}
 
+.active{
+background:#22c55e;
+}
+
 .grid{
 max-width:900px;
 margin:auto;
@@ -52,8 +56,8 @@ margin:auto;
 
 .card{
 background:#111827;
-border-radius:15px;
 padding:10px;
+border-radius:15px;
 margin-bottom:15px;
 }
 
@@ -67,13 +71,9 @@ display:flex;
 justify-content:space-between;
 align-items:center;
 margin-top:10px;
-gap:10px;
 flex-wrap:wrap;
+gap:10px;
 }
-
-.like{background:#ef4444;}
-.liked{background:#f97316;}
-.delete{background:#dc2626;}
 
 .small{
 opacity:.7;
@@ -85,11 +85,14 @@ font-size:13px;
 <body>
 
 <header>
+
 <input id="search" placeholder="検索">
 
-<button onclick="toggleMyLikes()">❤️いいね一覧</button>
-<button onclick="toggleMyPosts()">📌マイ投稿</button>
+<button id="homeBtn" class="active" onclick="setMode('home')">ホーム</button>
+<button id="followBtn" onclick="setMode('follow')">フォロー</button>
+
 <button id="loginBtn">ログイン</button>
+
 </header>
 
 <div class="grid" id="posts"></div>
@@ -102,18 +105,21 @@ const supabaseKey = "sb_publishable_p1-D04hIexKwLQoprjW1Ww_PWyzW8Ra";
 const client = supabase.createClient(supabaseUrl, supabaseKey);
 
 let user = null;
-let showLikesOnly = false;
-let showMineOnly = false;
+let mode = "home";
+let followingList = [];
 
-/* ===== ログイン ===== */
+/* ===== init ===== */
 async function init(){
+
 const { data:{session} } = await client.auth.getSession();
 if(session) user = session.user;
+
+await loadFollowing();
 loadPosts();
 }
 init();
 
-/* ===== ログインボタン ===== */
+/* ===== login ===== */
 document.getElementById("loginBtn").onclick = async ()=>{
 await client.auth.signInWithOAuth({
 provider:"discord",
@@ -121,77 +127,34 @@ options:{redirectTo:location.href}
 });
 };
 
-/* ===== マイ投稿 ===== */
-function toggleMyPosts(){
-showMineOnly = !showMineOnly;
+/* ===== モード切替 ===== */
+function setMode(m){
+
+mode = m;
+
+document.getElementById("homeBtn").classList.remove("active");
+document.getElementById("followBtn").classList.remove("active");
+
+if(m === "home"){
+document.getElementById("homeBtn").classList.add("active");
+}else{
+document.getElementById("followBtn").classList.add("active");
+}
+
 loadPosts();
 }
 
-/* ===== いいね一覧 ===== */
-function toggleMyLikes(){
-showLikesOnly = !showLikesOnly;
-loadPosts();
-}
+/* ===== フォロー一覧取得 ===== */
+async function loadFollowing(){
 
-/* ===== いいね ===== */
-async function toggleLike(postId){
-
-if(!user) return alert("ログインしてください");
+if(!user) return;
 
 const { data } = await client
-.from("likes")
-.select("*")
-.eq("user_id", user.id)
-.eq("post_id", postId)
-.single();
+.from("follows")
+.select("following_id")
+.eq("follower_id", user.id);
 
-if(data){
-
-await client.from("likes")
-.delete()
-.eq("user_id", user.id)
-.eq("post_id", postId);
-
-}else{
-
-await client.from("likes")
-.insert({
-user_id:user.id,
-post_id:postId
-});
-}
-
-loadPosts();
-}
-
-/* ===== ダウンロード ===== */
-async function downloadImage(url, filename){
-
-const res = await fetch(url);
-const blob = await res.blob();
-
-const blobUrl = URL.createObjectURL(blob);
-
-const a = document.createElement("a");
-a.href = blobUrl;
-a.download = filename || "image.jpg";
-document.body.appendChild(a);
-a.click();
-a.remove();
-
-URL.revokeObjectURL(blobUrl);
-}
-
-/* ===== 削除 ===== */
-async function deletePost(id){
-
-if(!user) return alert("ログインしてください");
-
-await client.from("posts")
-.delete()
-.eq("id", id);
-
-loadPosts();
+followingList = data.map(f => f.following_id);
 }
 
 /* ===== 投稿取得 ===== */
@@ -202,36 +165,30 @@ const { data:posts } = await client
 .select("*")
 .order("created_at",{ascending:false});
 
-const { data:likes } = user
-? await client.from("likes").select("*").eq("user_id", user.id)
-: { data:[] };
-
 let filtered = posts;
 
-/* マイ投稿 */
-if(showMineOnly && user){
-filtered = filtered.filter(p => p.user_id === user.id);
+/* フォロータイムライン */
+if(mode === "follow" && user){
+filtered = posts.filter(p =>
+followingList.includes(p.user_id)
+);
 }
 
-/* いいね投稿 */
-if(showLikesOnly && user){
-const ids = likes.map(l=>l.post_id);
-filtered = filtered.filter(p => ids.includes(p.id));
+render(filtered);
 }
 
-render(filtered, likes);
-}
-
-/* ===== 描画 ===== */
-function render(posts, likes){
+/* ===== 表示 ===== */
+function render(posts){
 
 const box = document.getElementById("posts");
 box.innerHTML = "";
 
-posts.forEach(p=>{
+if(posts.length === 0){
+box.innerHTML = "<p>投稿がありません</p>";
+return;
+}
 
-const isLiked = likes?.some(l=>l.post_id === p.id);
-const isOwner = user && p.user_id === user.id;
+posts.forEach(p=>{
 
 box.innerHTML += `
 <div class="card">
@@ -239,32 +196,10 @@ box.innerHTML += `
 <img src="${p.image_url}">
 
 <div class="row">
-
 <div>
 <div>${p.title}</div>
 <div class="small">${p.user_name}</div>
 </div>
-
-</div>
-
-<div class="row">
-
-<button class="${isLiked ? 'liked':'like'}"
-onclick="toggleLike(${p.id})">
-❤️
-</button>
-
-<button onclick="downloadImage('${p.image_url}','${p.title}')">
-📥DL
-</button>
-
-${isOwner ? `
-<button class="delete"
-onclick="deletePost(${p.id})">
-削除
-</button>
-` : ""}
-
 </div>
 
 </div>
