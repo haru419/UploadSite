@@ -40,6 +40,7 @@ h1{font-size:32px;}
 display:flex;
 gap:10px;
 align-items:center;
+flex-wrap:wrap;
 }
 
 button{
@@ -142,10 +143,11 @@ text-align:center;
 background:#2563eb;
 border-radius:12px;
 color:white;
-text-decoration:none;
-transition:.2s;
 font-weight:bold;
 cursor:pointer;
+border:none;
+width:100%;
+transition:.2s;
 }
 
 .downloadBtn:hover{
@@ -199,6 +201,8 @@ header{flex-direction:column;align-items:stretch;}
 
 <div class="top-right">
 <input type="text" id="search" placeholder="検索">
+
+<button id="myPostsBtn">マイ投稿</button>
 <button id="loginBtn">Discordログイン</button>
 </div>
 </header>
@@ -224,7 +228,9 @@ const supabaseKey = "sb_publishable_p1-D04hIexKwLQoprjW1Ww_PWyzW8Ra";
 const client = window.supabase.createClient(supabaseUrl, supabaseKey);
 
 let currentUser = null;
+let showOnlyMine = false;
 
+/* ===== ログインチェック ===== */
 async function checkUser(){
 const { data:{session} } = await client.auth.getSession();
 
@@ -236,6 +242,7 @@ session.user.user_metadata.full_name;
 }
 checkUser();
 
+/* ===== ログイン状態更新 ===== */
 client.auth.onAuthStateChange((event,session)=>{
 if(session){
 currentUser = session.user;
@@ -244,6 +251,7 @@ session.user.user_metadata.full_name;
 }
 });
 
+/* ===== ログイン ===== */
 document.getElementById("loginBtn").onclick = async ()=>{
 await client.auth.signInWithOAuth({
 provider:"discord",
@@ -253,6 +261,17 @@ redirectTo:"https://haru419.github.io/UploadSite/"
 });
 };
 
+/* ===== マイ投稿切り替え ===== */
+document.getElementById("myPostsBtn").onclick = ()=>{
+showOnlyMine = !showOnlyMine;
+
+document.getElementById("myPostsBtn").innerText =
+showOnlyMine ? "全て表示" : "マイ投稿";
+
+loadPosts();
+};
+
+/* ===== ドラッグUI ===== */
 const drop = document.getElementById("drop");
 const fileInput = document.getElementById("fileInput");
 
@@ -277,7 +296,9 @@ fileInput.addEventListener("change",(e)=>{
 uploadFile(e.target.files[0]);
 });
 
+/* ===== アップロード ===== */
 async function uploadFile(file){
+
 if(!currentUser){
 alert("Discordログインしてください");
 return;
@@ -335,7 +356,7 @@ document.getElementById("progressBox").style.display = "none";
 loadPosts();
 }
 
-/* ===== 削除機能 ===== */
+/* ===== 削除 ===== */
 async function deletePost(id){
 
 if(!currentUser){
@@ -361,6 +382,7 @@ loadPosts();
 
 /* ===== ダウンロード ===== */
 async function downloadImage(url, filename){
+
 const res = await fetch(url);
 const blob = await res.blob();
 
@@ -376,7 +398,9 @@ a.remove();
 window.URL.revokeObjectURL(blobUrl);
 }
 
+/* ===== 投稿取得 ===== */
 async function loadPosts(){
+
 const { data, error } = await client
 .from("posts")
 .select("*")
@@ -387,9 +411,19 @@ console.log(error);
 return;
 }
 
-renderPosts(data);
+let posts = data;
+
+/* マイ投稿フィルター */
+if(showOnlyMine && currentUser){
+posts = posts.filter(post =>
+post.user_id === currentUser.id
+);
 }
 
+renderPosts(posts);
+}
+
+/* ===== 表示 ===== */
 function renderPosts(posts){
 
 const gallery = document.getElementById("gallery");
@@ -418,6 +452,7 @@ gallery.innerHTML += `
 </a>
 
 <div class="info">
+
 <h3>${post.title}</h3>
 
 <div class="user">
