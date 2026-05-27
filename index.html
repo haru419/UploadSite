@@ -112,11 +112,23 @@ box-shadow:0 0 20px rgba(0,0,0,.3);
 animation:fade .3s;
 }
 
-.card img{
+/* サムネ共通 */
+.thumb{
 width:100%;
 height:220px;
+display:flex;
+align-items:center;
+justify-content:center;
+background:#0b1220;
+color:#94a3b8;
+font-size:14px;
+overflow:hidden;
+}
+
+.thumb img{
+width:100%;
+height:100%;
 object-fit:cover;
-display:block;
 }
 
 .info{padding:15px;}
@@ -205,9 +217,9 @@ header{flex-direction:column;align-items:stretch;}
 
 <div id="drop">
 <h2>ドラッグ&ドロップ</h2>
-<p>またはクリックして画像を選択</p>
+<p>またはクリックしてファイル選択</p>
 
-<input type="file" id="fileInput" hidden accept="image/*">
+<input type="file" id="fileInput" hidden accept="image/*,.txt,.zip">
 
 <div id="progressBox">
 <div id="progress"></div>
@@ -278,12 +290,17 @@ uploadFile(e.target.files[0]);
 });
 
 async function uploadFile(file){
+
 if(!currentUser){
 alert("Discordログインしてください");
 return;
 }
 
-const ext = file.name.split(".").pop();
+const ext = file.name.split(".").pop().toLowerCase();
+
+const isText = ext === "txt";
+const isZip = ext === "zip";
+
 const fileName = Date.now() + "." + ext;
 
 document.getElementById("progressBox").style.display = "block";
@@ -306,7 +323,7 @@ const { data:urlData } = client.storage
 .from("uploads")
 .getPublicUrl(fileName);
 
-const imageUrl = urlData.publicUrl;
+const fileUrl = urlData.publicUrl;
 
 progress.style.width = "90%";
 
@@ -314,7 +331,8 @@ const { error:dbError } = await client
 .from("posts")
 .insert([{
 title:file.name,
-image_url:imageUrl,
+image_url:fileUrl,
+file_type: isText ? "text" : isZip ? "zip" : "image",
 user_name:currentUser.user_metadata.full_name,
 user_avatar:currentUser.user_metadata.avatar_url,
 user_id:currentUser.id
@@ -335,7 +353,6 @@ document.getElementById("progressBox").style.display = "none";
 loadPosts();
 }
 
-/* ===== 削除機能 ===== */
 async function deletePost(id){
 
 if(!currentUser){
@@ -359,7 +376,6 @@ return;
 loadPosts();
 }
 
-/* ===== ダウンロード ===== */
 async function downloadImage(url, filename){
 const res = await fetch(url);
 const blob = await res.blob();
@@ -368,7 +384,7 @@ const blobUrl = window.URL.createObjectURL(blob);
 
 const a = document.createElement("a");
 a.href = blobUrl;
-a.download = filename || "download.jpg";
+a.download = filename || "download";
 document.body.appendChild(a);
 a.click();
 a.remove();
@@ -410,12 +426,27 @@ filtered.forEach(post=>{
 
 const isOwner = currentUser && post.user_id === currentUser.id;
 
+let thumbHTML = "";
+
+if(post.file_type === "image"){
+thumbHTML = `<img src="${post.image_url}">`;
+}
+else if(post.file_type === "text"){
+thumbHTML = `<div>TEXT FILE</div>`;
+}
+else if(post.file_type === "zip"){
+thumbHTML = `<div>ZIP FILE</div>`;
+}
+else{
+thumbHTML = `<div>FILE</div>`;
+}
+
 gallery.innerHTML += `
 <div class="card">
 
-<a href="${post.image_url}" target="_blank">
-<img src="${post.image_url}">
-</a>
+<div class="thumb">
+${thumbHTML}
+</div>
 
 <div class="info">
 <h3>${post.title}</h3>
