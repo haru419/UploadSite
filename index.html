@@ -79,6 +79,18 @@ gap:10px;
 opacity:.7;
 font-size:13px;
 }
+
+.like{
+background:#ef4444;
+}
+
+.liked{
+background:#f97316;
+}
+
+.delete{
+background:#dc2626;
+}
 </style>
 </head>
 
@@ -107,6 +119,7 @@ const client = supabase.createClient(supabaseUrl, supabaseKey);
 let user = null;
 let mode = "home";
 let followingList = [];
+let likes = [];
 
 /* ===== init ===== */
 async function init(){
@@ -115,6 +128,8 @@ const { data:{session} } = await client.auth.getSession();
 if(session) user = session.user;
 
 await loadFollowing();
+await loadLikes();
+
 loadPosts();
 }
 init();
@@ -127,7 +142,7 @@ options:{redirectTo:location.href}
 });
 };
 
-/* ===== モード切替 ===== */
+/* ===== mode ===== */
 function setMode(m){
 
 mode = m;
@@ -144,7 +159,7 @@ document.getElementById("followBtn").classList.add("active");
 loadPosts();
 }
 
-/* ===== フォロー一覧取得 ===== */
+/* ===== フォロー一覧 ===== */
 async function loadFollowing(){
 
 if(!user) return;
@@ -155,6 +170,76 @@ const { data } = await client
 .eq("follower_id", user.id);
 
 followingList = data.map(f => f.following_id);
+}
+
+/* ===== いいね一覧 ===== */
+async function loadLikes(){
+
+if(!user) return;
+
+const { data } = await client
+.from("likes")
+.select("*")
+.eq("user_id", user.id);
+
+likes = data;
+}
+
+/* ===== いいね ===== */
+async function toggleLike(postId){
+
+if(!user) return alert("ログインしてください");
+
+const exists = likes.find(l => l.post_id === postId);
+
+if(exists){
+
+await client.from("likes")
+.delete()
+.eq("user_id", user.id)
+.eq("post_id", postId);
+
+}else{
+
+await client.from("likes")
+.insert({
+user_id:user.id,
+post_id:postId
+});
+}
+
+await loadLikes();
+loadPosts();
+}
+
+/* ===== ダウンロード ===== */
+async function downloadImage(url, filename){
+
+const res = await fetch(url);
+const blob = await res.blob();
+
+const blobUrl = URL.createObjectURL(blob);
+
+const a = document.createElement("a");
+a.href = blobUrl;
+a.download = filename || "image.jpg";
+document.body.appendChild(a);
+a.click();
+a.remove();
+
+URL.revokeObjectURL(blobUrl);
+}
+
+/* ===== 削除 ===== */
+async function deletePost(id){
+
+if(!user) return;
+
+await client.from("posts")
+.delete()
+.eq("id", id);
+
+loadPosts();
 }
 
 /* ===== 投稿取得 ===== */
@@ -177,7 +262,7 @@ followingList.includes(p.user_id)
 render(filtered);
 }
 
-/* ===== 表示 ===== */
+/* ===== 描画 ===== */
 function render(posts){
 
 const box = document.getElementById("posts");
@@ -190,6 +275,9 @@ return;
 
 posts.forEach(p=>{
 
+const isLiked = likes.some(l => l.post_id === p.id);
+const isOwner = user && p.user_id === user.id;
+
 box.innerHTML += `
 <div class="card">
 
@@ -200,6 +288,29 @@ box.innerHTML += `
 <div>${p.title}</div>
 <div class="small">${p.user_name}</div>
 </div>
+</div>
+
+<div class="row">
+
+<!-- ❤️いいね -->
+<button class="${isLiked ? 'liked':'like'}"
+onclick="toggleLike(${p.id})">
+❤️
+</button>
+
+<!-- 📥DL -->
+<button onclick="downloadImage('${p.image_url}','${p.title}')">
+📥
+</button>
+
+<!-- 🗑削除 -->
+${isOwner ? `
+<button class="delete"
+onclick="deletePost(${p.id})">
+削除
+</button>
+` : ""}
+
 </div>
 
 </div>
