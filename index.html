@@ -185,7 +185,10 @@ flex-direction:column;
 
 <div class="top-right">
 
-<input type="text" id="search" placeholder="検索">
+<input
+type="text"
+id="search"
+placeholder="検索">
 
 <button id="loginBtn">
 Discordログイン
@@ -198,9 +201,16 @@ Discordログイン
 <div id="drop">
 
 <h2>ドラッグ&ドロップ</h2>
-<p>またはクリックして画像を選択</p>
 
-<input type="file" id="fileInput" hidden accept="image/*">
+<p>
+またはクリックして画像を選択
+</p>
+
+<input
+type="file"
+id="fileInput"
+hidden
+accept="image/*">
 
 <div id="progressBox">
 <div id="progress"></div>
@@ -216,7 +226,7 @@ const supabaseUrl =
 "https://dnzxeiukhdcysqxtvcab.supabase.co";
 
 const supabaseKey =
-"sb_publishable_p1-D04hIexKwLQoprjW1Ww_PWyzW8Rasb_publishable_p1-D04hIexKwLQoprjW1Ww_PWyzW8Ra";
+"ここにPublishableKey";
 
 const client =
 window.supabase.createClient(
@@ -236,7 +246,8 @@ if(session){
 
 currentUser = session.user;
 
-document.getElementById("loginBtn")
+document
+.getElementById("loginBtn")
 .innerText =
 session.user.user_metadata.full_name;
 
@@ -253,7 +264,8 @@ if(session){
 
 currentUser = session.user;
 
-document.getElementById("loginBtn")
+document
+.getElementById("loginBtn")
 .innerText =
 session.user.user_metadata.full_name;
 
@@ -267,7 +279,14 @@ document
 .onclick = async ()=>{
 
 await client.auth.signInWithOAuth({
-provider:"discord"
+
+provider:"discord",
+
+options:{
+redirectTo:
+"https://haru419.github.io/UploadSite/"
+}
+
 });
 
 };
@@ -283,15 +302,21 @@ fileInput.click();
 };
 
 drop.addEventListener("dragover",(e)=>{
+
 e.preventDefault();
+
 drop.classList.add("drag");
+
 });
 
 drop.addEventListener("dragleave",()=>{
+
 drop.classList.remove("drag");
+
 });
 
 drop.addEventListener("drop",(e)=>{
+
 e.preventDefault();
 
 drop.classList.remove("drag");
@@ -304,7 +329,9 @@ uploadFile(file);
 });
 
 fileInput.addEventListener("change",(e)=>{
+
 uploadFile(e.target.files[0]);
+
 });
 
 async function uploadFile(file){
@@ -312,6 +339,7 @@ async function uploadFile(file){
 if(!currentUser){
 
 alert("Discordログインしてください");
+
 return;
 
 }
@@ -410,7 +438,10 @@ error
 } = await client
 .from("posts")
 .select("*")
-.order("created_at",{ascending:false});
+.order(
+"created_at",
+{ascending:false}
+);
 
 if(error){
 
@@ -446,10 +477,13 @@ post.title
 
 if(filtered.length === 0){
 
-gallery.innerHTML =
-`<div class="empty">
+gallery.innerHTML = `
+
+<div class="empty">
 投稿がありません
-</div>`;
+</div>
+
+`;
 
 return;
 
@@ -487,7 +521,10 @@ gallery.innerHTML += `
 
 document
 .getElementById("search")
-.addEventListener("input",loadPosts);
+.addEventListener(
+"input",
+loadPosts
+);
 
 loadPosts();
 
