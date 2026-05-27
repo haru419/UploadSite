@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Profile</title>
+<title>Profile UI Improved</title>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
@@ -11,66 +11,125 @@
 body{
 margin:0;
 font-family:sans-serif;
-background:#0f172a;
+background:#0b1220;
 color:white;
+}
+
+/* ===== layout ===== */
+.container{
+max-width:800px;
+margin:auto;
 padding:20px;
-}
-
-.container{max-width:700px;margin:auto;}
-
-.card{
-background:#111827;
-padding:15px;
-border-radius:10px;
-}
-
-.top{
 display:flex;
+flex-direction:column;
 gap:15px;
+}
+
+/* ===== profile card ===== */
+.profileCard{
+background:#111827;
+border-radius:16px;
+padding:20px;
+display:flex;
+gap:20px;
 align-items:center;
 }
 
 .avatar{
-width:80px;
-height:80px;
+width:90px;
+height:90px;
 border-radius:50%;
 object-fit:cover;
+border:3px solid #5865f2;
 cursor:pointer;
-border:2px solid #5865f2;
+}
+
+.profileInfo{
+flex:1;
+}
+
+.nameRow{
+display:flex;
+gap:10px;
+align-items:center;
+flex-wrap:wrap;
+}
+
+h2{
+margin:0;
+font-size:20px;
+}
+
+small{
+opacity:.7;
 }
 
 input, textarea{
 width:100%;
 padding:10px;
 margin-top:10px;
-border:none;
 border-radius:10px;
+border:none;
 background:#1e293b;
 color:white;
 }
 
+/* ===== buttons ===== */
+.btnRow{
+display:flex;
+gap:10px;
+flex-wrap:wrap;
+margin-top:10px;
+}
+
 button{
-padding:10px;
+padding:10px 14px;
 border:none;
 border-radius:10px;
+cursor:pointer;
 background:#5865f2;
 color:white;
-cursor:pointer;
-margin-top:10px;
+transition:.2s;
+}
+
+button:hover{
+transform:scale(1.05);
 }
 
 .follow{background:#22c55e;}
 .unfollow{background:#ef4444;}
 
-.post{
-width:100%;
-border-radius:10px;
-margin-top:10px;
+/* ===== posts ===== */
+.postCard{
+background:#111827;
+border-radius:16px;
+overflow:hidden;
+transition:.2s;
 }
 
-.small{opacity:.7;font-size:13px;}
+.postCard:hover{
+transform:translateY(-2px);
+}
 
-.hidden{display:none;}
+.postImg{
+width:100%;
+display:block;
+}
+
+.postBody{
+padding:10px;
+}
+
+.postUser{
+font-size:13px;
+opacity:.7;
+cursor:pointer;
+color:#60a5fa;
+}
+
+.hidden{
+display:none;
+}
 </style>
 </head>
 
@@ -78,27 +137,33 @@ margin-top:10px;
 
 <div class="container">
 
-<div class="card">
+<!-- ===== PROFILE ===== -->
+<div class="profileCard">
 
-<div class="top">
 <img id="avatar" class="avatar" onclick="pickAvatar()">
-<div>
+
+<div class="profileInfo">
+
+<div class="nameRow">
 <h2 id="name"></h2>
-<div class="small" id="state"></div>
-</div>
+<small id="state"></small>
 </div>
 
-<input id="nameInput" placeholder="名前変更">
+<input id="nameInput" placeholder="名前">
 <textarea id="bio" placeholder="自己紹介"></textarea>
 
-<button onclick="saveProfile()">プロフィール保存</button>
-
+<div class="btnRow">
+<button onclick="saveProfile()">保存</button>
 <div id="followArea"></div>
-
-<input type="file" id="file" class="hidden">
-
 </div>
 
+</div>
+</div>
+
+<!-- hidden file -->
+<input type="file" id="file" class="hidden">
+
+<!-- ===== POSTS ===== -->
 <div id="posts"></div>
 
 </div>
@@ -113,7 +178,7 @@ const client = supabase.createClient(
 const uid = new URLSearchParams(location.search).get("uid");
 
 let me=null;
-let avatarFile=null;
+let avatarUrl=null;
 
 /* ===== init ===== */
 async function init(){
@@ -122,7 +187,7 @@ const { data:{session} } = await client.auth.getSession();
 me=session?.user||null;
 
 if(!uid){
-document.body.innerHTML="UIDなし";
+document.body.innerHTML="<h2>ユーザーが指定されていません</h2>";
 return;
 }
 
@@ -132,7 +197,7 @@ loadFollow();
 }
 init();
 
-/* ===== プロフィール取得 ===== */
+/* ===== profile ===== */
 async function loadProfile(){
 
 const { data } = await client
@@ -142,63 +207,82 @@ const { data } = await client
 .single();
 
 document.getElementById("name").innerText=data.full_name||"名無し";
-document.getElementById("bio").value=data.bio||"";
 document.getElementById("nameInput").value=data.full_name||"";
+document.getElementById("bio").value=data.bio||"";
 
 document.getElementById("avatar").src=
-data.avatar_url||"https://via.placeholder.com/80";
+data.avatar_url||"https://via.placeholder.com/90";
 
-if(me && me.id===uid){
-document.getElementById("state").innerText="あなたのプロフィール";
-}
+document.getElementById("state").innerText=
+(me && me.id===uid) ? "あなたのプロフィール" : "";
 }
 
-/* ===== 画像選択 ===== */
+/* ===== avatar upload ===== */
 function pickAvatar(){
 if(!me || me.id!==uid) return;
-
 document.getElementById("file").click();
 }
 
-/* ===== 画像アップロード保持 ===== */
 document.getElementById("file").onchange=async(e)=>{
 
 const file=e.target.files[0];
-if(!file) return;
-
 const name=Date.now()+file.name;
 
 await client.storage.from("avatars").upload(name,file);
 
 const { data } = client.storage.from("avatars").getPublicUrl(name);
 
-avatarFile=data.publicUrl;
+avatarUrl=data.publicUrl;
 
-document.getElementById("avatar").src=avatarFile;
+document.getElementById("avatar").src=avatarUrl;
 };
 
-/* ===== 保存 ===== */
+/* ===== save ===== */
 async function saveProfile(){
 
 if(!me || me.id!==uid){
-alert("自分のみ編集できます");
+alert("自分のみ編集可能");
 return;
 }
 
-const name=document.getElementById("nameInput").value;
-const bio=document.getElementById("bio").value;
-
 await client.from("profiles").upsert({
 id:uid,
-full_name:name,
-bio:bio,
-avatar_url:avatarFile || document.getElementById("avatar").src
+full_name:document.getElementById("nameInput").value,
+bio:document.getElementById("bio").value,
+avatar_url:avatarUrl
 });
 
 loadProfile();
 }
 
-/* ===== フォロー ===== */
+/* ===== follow UI ===== */
+async function loadFollow(){
+
+const box=document.getElementById("followArea");
+
+if(!me){
+box.innerHTML="ログインしてください";
+return;
+}
+
+if(me.id===uid){
+box.innerHTML="";
+return;
+}
+
+const { data } = await client
+.from("follows")
+.select("*")
+.eq("follower_id",me.id)
+.eq("following_id",uid);
+
+const is=data.length>0;
+
+box.innerHTML=is
+? `<button class="unfollow" onclick="unfollow()">フォロー解除</button>`
+: `<button class="follow" onclick="follow()">フォロー</button>`;
+}
+
 async function follow(){
 await client.from("follows").insert({
 follower_id:me.id,
@@ -216,47 +300,29 @@ await client.from("follows")
 loadFollow();
 }
 
-async function loadFollow(){
-
-const box=document.getElementById("followArea");
-
-if(!me){
-box.innerHTML="ログインしてください";
-return;
-}
-
-if(me.id===uid){
-box.innerHTML="自分のプロフィール";
-return;
-}
-
-const { data } = await client
-.from("follows")
-.select("*")
-.eq("follower_id",me.id)
-.eq("following_id",uid);
-
-const is=data.length>0;
-
-box.innerHTML=is
-? `<button class="unfollow" onclick="unfollow()">フォロー解除</button>`
-: `<button class="follow" onclick="follow()">フォローする</button>`;
-}
-
-/* ===== 投稿 ===== */
+/* ===== posts ===== */
 async function loadPosts(){
 
 const { data } = await client
 .from("posts")
 .select("*")
-.eq("user_id",uid);
+.eq("user_id",uid)
+.order("created_at",{ascending:false});
 
 const box=document.getElementById("posts");
 box.innerHTML="";
 
 data.forEach(p=>{
 box.innerHTML+=`
-<img class="post" src="${p.image_url}">
+<div class="postCard">
+
+<img class="postImg" src="${p.image_url}">
+
+<div class="postBody">
+<div class="postUser">${p.user_name}</div>
+</div>
+
+</div>
 `;
 });
 }
