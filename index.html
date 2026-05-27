@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Profile</title>
+
+<title>UploadSNS</title>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
@@ -16,30 +17,16 @@ color:white;
 padding:20px;
 }
 
-.container{
-max-width:800px;
-margin:auto;
-}
-
-.profile{
+header{
 display:flex;
-gap:15px;
+gap:10px;
+flex-wrap:wrap;
 align-items:center;
 margin-bottom:20px;
 }
 
-.profile img{
-width:90px;
-height:90px;
-border-radius:50%;
-cursor:pointer;
-border:2px solid #5865f2;
-}
-
-input, textarea{
-width:100%;
+input{
 padding:10px;
-margin-top:10px;
 border:none;
 border-radius:10px;
 background:#1e293b;
@@ -51,7 +38,6 @@ padding:10px 15px;
 border:none;
 border-radius:10px;
 cursor:pointer;
-margin-top:10px;
 background:#5865f2;
 color:white;
 transition:.2s;
@@ -59,58 +45,55 @@ transition:.2s;
 
 button:hover{transform:scale(1.05);}
 
-.follow{
-background:#22c55e;
+.card{
+background:#111827;
+border-radius:15px;
+overflow:hidden;
+margin-bottom:15px;
+padding:10px;
 }
 
-.unfollow{
+img{
+width:100%;
+border-radius:10px;
+}
+
+.row{
+display:flex;
+justify-content:space-between;
+align-items:center;
+margin-top:10px;
+}
+
+.like{
 background:#ef4444;
 }
 
-.grid{
-display:grid;
-grid-template-columns:repeat(auto-fill,minmax(180px,1fr));
-gap:10px;
-margin-top:20px;
-}
-
-.post{
-width:100%;
-height:160px;
-object-fit:cover;
-border-radius:10px;
+.liked{
+background:#f97316;
 }
 
 .small{
 opacity:.7;
 font-size:14px;
-margin-top:5px;
+}
+
+.grid{
+max-width:800px;
+margin:auto;
 }
 </style>
 </head>
 
 <body>
 
-<div class="container">
-
-<div class="profile">
-<img id="avatar" onclick="changeAvatar()">
-<div style="flex:1">
-<h2 id="name"></h2>
-
-<div class="small" id="followCount"></div>
-
-<textarea id="bio"></textarea>
-
-<button onclick="saveBio()">プロフィール保存</button>
-
-<div id="followArea"></div>
-</div>
-</div>
+<header>
+<input id="search" placeholder="検索">
+<button onclick="toggleMyLikes()">❤️ いいね一覧</button>
+<button id="loginBtn">ログイン</button>
+</header>
 
 <div class="grid" id="posts"></div>
-
-</div>
 
 <script>
 
@@ -119,156 +102,124 @@ const supabaseKey = "sb_publishable_p1-D04hIexKwLQoprjW1Ww_PWyzW8Ra";
 
 const client = supabase.createClient(supabaseUrl, supabaseKey);
 
-const uid = new URLSearchParams(location.search).get("uid");
+let user = null;
+let showLikesOnly = false;
 
-let me = null;
-
-/* ===== 初期化 ===== */
+/* ===== login ===== */
 async function init(){
-
 const { data:{session} } = await client.auth.getSession();
-if(session) me = session.user;
+if(session) user = session.user;
 
-await loadProfile();
-await loadPosts();
-await loadFollow();
+loadPosts();
 }
+init();
 
-/* ===== プロフィール取得 ===== */
-async function loadProfile(){
+/* ===== login button ===== */
+document.getElementById("loginBtn").onclick = async ()=>{
+await client.auth.signInWithOAuth({
+provider:"discord",
+options:{redirectTo:location.href}
+});
+};
+
+/* ===== like toggle ===== */
+async function toggleLike(postId){
+
+if(!user) return alert("ログインしてください");
 
 const { data } = await client
-.from("profiles")
+.from("likes")
 .select("*")
-.eq("id", uid)
+.eq("user_id", user.id)
+.eq("post_id", postId)
 .single();
 
-document.getElementById("name").innerText =
-data.full_name || "名無し";
+if(data){
 
-document.getElementById("avatar").src =
-data.avatar_url || "https://via.placeholder.com/80";
-
-document.getElementById("bio").value =
-data.bio || "";
-}
-
-/* ===== bio保存 ===== */
-async function saveBio(){
-
-if(!me || me.id !== uid){
-alert("自分のプロフィールのみ編集できます");
-return;
-}
-
-await client.from("profiles")
-.upsert({
-id: me.id,
-bio: document.getElementById("bio").value
-});
-
-loadProfile();
-}
-
-/* ===== アイコン変更 ===== */
-async function changeAvatar(){
-
-if(!me || me.id !== uid){
-alert("自分のみ変更できます");
-return;
-}
-
-const url = prompt("新しいアイコンURLを入力");
-
-if(!url) return;
-
-await client.from("profiles")
-.upsert({
-id: me.id,
-avatar_url: url
-});
-
-loadProfile();
-}
-
-/* ===== フォロー ===== */
-async function follow(){
-
-await client.from("follows").insert({
-follower_id: me.id,
-following_id: uid
-});
-
-loadFollow();
-}
-
-async function unfollow(){
-
-await client.from("follows")
+await client
+.from("likes")
 .delete()
-.eq("follower_id", me.id)
-.eq("following_id", uid);
+.eq("user_id", user.id)
+.eq("post_id", postId);
 
-loadFollow();
+}else{
+
+await client
+.from("likes")
+.insert({
+user_id:user.id,
+post_id:postId
+});
 }
 
-/* ===== フォロー状態 ===== */
-async function loadFollow(){
-
-const { data } = await client
-.from("follows")
-.select("*")
-.eq("following_id", uid);
-
-const isFollowing =
-data?.some(f => f.follower_id === me?.id);
-
-const area = document.getElementById("followArea");
-
-if(me?.id === uid){
-area.innerHTML = "<b>あなたのプロフィール</b>";
-return;
+loadPosts();
 }
 
-area.innerHTML = isFollowing
-? `<button class="unfollow" onclick="unfollow()">フォロー解除</button>`
-: `<button class="follow" onclick="follow()">フォローする</button>`;
+/* ===== いいね一覧切替 ===== */
+function toggleMyLikes(){
+showLikesOnly = !showLikesOnly;
+loadPosts();
 }
 
-/* ===== フォロー数 ===== */
-async function loadFollowCount(){
-
-const { data } = await client
-.from("follows")
-.select("*")
-.eq("following_id", uid);
-
-document.getElementById("followCount").innerText =
-`フォロワー: ${data.length}`;
-}
-
-/* ===== 投稿 ===== */
+/* ===== 投稿取得 ===== */
 async function loadPosts(){
 
-const { data } = await client
+const { data:posts } = await client
 .from("posts")
 .select("*")
-.eq("user_id", uid)
 .order("created_at",{ascending:false});
+
+const { data:likes } = user
+? await client.from("likes").select("*").eq("user_id", user.id)
+: { data:[] };
+
+let filtered = posts;
+
+/* いいねフィルター */
+if(showLikesOnly && user){
+const likedIds = likes.map(l=>l.post_id);
+filtered = posts.filter(p => likedIds.includes(p.id));
+}
+
+render(filtered, likes);
+}
+
+/* ===== 描画 ===== */
+function render(posts, likes){
 
 const box = document.getElementById("posts");
 box.innerHTML = "";
 
-data.forEach(p=>{
+posts.forEach(p=>{
+
+const isLiked = likes?.some(l=>l.post_id === p.id);
+const likeCount = likes?.filter(l=>l.post_id === p.id).length || 0;
+
 box.innerHTML += `
-<img class="post" src="${p.image_url}">
+<div class="card">
+
+<img src="${p.image_url}">
+
+<div class="row">
+<div>
+<div>${p.title}</div>
+<div class="small">${p.user_name}</div>
+</div>
+
+<button class="${isLiked ? 'liked':'like'}"
+onclick="toggleLike(${p.id})">
+❤️ ${isLiked ? 'Liked' : 'Like'}
+</button>
+
+</div>
+
+</div>
 `;
 });
 }
 
-init();
-
-loadFollowCount();
+/* search */
+document.getElementById("search").addEventListener("input",loadPosts);
 
 </script>
 
