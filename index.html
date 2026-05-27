@@ -238,31 +238,45 @@ const client = window.supabase.createClient(supabaseUrl, supabaseKey);
 let currentUser = null;
 
 async function checkUser(){
-const { data:{session} } = await client.auth.getSession();
+
+const { data:{session} } =
+await client.auth.getSession();
 
 if(session){
+
 currentUser = session.user;
+
 document.getElementById("loginBtn").innerText =
 session.user.user_metadata.full_name;
+
 }
+
 }
+
 checkUser();
 
 client.auth.onAuthStateChange((event,session)=>{
+
 if(session){
+
 currentUser = session.user;
+
 document.getElementById("loginBtn").innerText =
 session.user.user_metadata.full_name;
+
 }
+
 });
 
 document.getElementById("loginBtn").onclick = async ()=>{
+
 await client.auth.signInWithOAuth({
 provider:"discord",
 options:{
 redirectTo:"https://haru419.github.io/UploadSite/"
 }
 });
+
 };
 
 const drop = document.getElementById("drop");
@@ -282,12 +296,156 @@ drop.classList.remove("drag");
 drop.addEventListener("drop",(e)=>{
 e.preventDefault();
 drop.classList.remove("drag");
+
 uploadFile(e.dataTransfer.files[0]);
+
 });
 
 fileInput.addEventListener("change",(e)=>{
 uploadFile(e.target.files[0]);
 });
+
+/* サムネ生成 */
+
+async function generateThumbnail(file,type){
+
+return new Promise(async(resolve)=>{
+
+/* 画像 */
+
+if(type === "image"){
+
+const reader = new FileReader();
+
+reader.onload = ()=>{
+
+const img = new Image();
+
+img.onload = ()=>{
+
+const canvas =
+document.createElement("canvas");
+
+const ctx =
+canvas.getContext("2d");
+
+canvas.width = 400;
+canvas.height = 220;
+
+ctx.drawImage(
+img,
+0,
+0,
+canvas.width,
+canvas.height
+);
+
+resolve(
+canvas.toDataURL(
+"image/jpeg",
+0.7
+)
+);
+
+};
+
+img.src = reader.result;
+
+};
+
+reader.readAsDataURL(file);
+
+return;
+
+}
+
+/* テキスト */
+
+if(type === "text"){
+
+const text = await file.text();
+
+const canvas =
+document.createElement("canvas");
+
+const ctx =
+canvas.getContext("2d");
+
+canvas.width = 400;
+canvas.height = 220;
+
+ctx.fillStyle = "#111827";
+ctx.fillRect(0,0,400,220);
+
+ctx.fillStyle = "#ffffff";
+ctx.font = "16px sans-serif";
+
+const lines =
+text.split("\n").slice(0,8);
+
+lines.forEach((line,i)=>{
+
+ctx.fillText(
+line.slice(0,40),
+20,
+35 + i * 22
+);
+
+});
+
+resolve(
+canvas.toDataURL(
+"image/jpeg",
+0.7
+)
+);
+
+return;
+
+}
+
+/* ZIP */
+
+if(type === "zip"){
+
+const canvas =
+document.createElement("canvas");
+
+const ctx =
+canvas.getContext("2d");
+
+canvas.width = 400;
+canvas.height = 220;
+
+ctx.fillStyle = "#1e293b";
+ctx.fillRect(0,0,400,220);
+
+ctx.fillStyle = "#ffffff";
+
+ctx.font = "bold 30px sans-serif";
+
+ctx.fillText(
+"ZIP FILE",
+100,
+120
+);
+
+resolve(
+canvas.toDataURL(
+"image/jpeg",
+0.7
+)
+);
+
+return;
+
+}
+
+});
+
+}
+
+/* アップロード */
 
 async function uploadFile(file){
 
@@ -296,19 +454,33 @@ alert("Discordログインしてください");
 return;
 }
 
-const ext = file.name.split(".").pop().toLowerCase();
+const ext =
+file.name.split(".").pop().toLowerCase();
 
 const isText = ext === "txt";
 const isZip = ext === "zip";
 
-const fileName = Date.now() + "." + ext;
+const fileType =
+isText ? "text" :
+isZip ? "zip" :
+"image";
 
-document.getElementById("progressBox").style.display = "block";
-const progress = document.getElementById("progress");
+const fileName =
+Date.now() + "." + ext;
+
+document.getElementById(
+"progressBox"
+).style.display = "block";
+
+const progress =
+document.getElementById("progress");
 
 progress.style.width = "20%";
 
-const { error:uploadError } = await client.storage
+/* Storage */
+
+const { error:uploadError } =
+await client.storage
 .from("uploads")
 .upload(fileName,file);
 
@@ -317,25 +489,51 @@ alert(uploadError.message);
 return;
 }
 
-progress.style.width = "70%";
+progress.style.width = "60%";
 
-const { data:urlData } = client.storage
+/* URL取得 */
+
+const { data:urlData } =
+client.storage
 .from("uploads")
 .getPublicUrl(fileName);
 
-const fileUrl = urlData.publicUrl;
+const fileUrl =
+urlData.publicUrl;
 
-progress.style.width = "90%";
+/* サムネ生成 */
 
-const { error:dbError } = await client
+const thumbnail =
+await generateThumbnail(
+file,
+fileType
+);
+
+progress.style.width = "80%";
+
+/* DB保存 */
+
+const { error:dbError } =
+await client
 .from("posts")
 .insert([{
+
 title:file.name,
+
 image_url:fileUrl,
-file_type: isText ? "text" : isZip ? "zip" : "image",
-user_name:currentUser.user_metadata.full_name,
-user_avatar:currentUser.user_metadata.avatar_url,
+
+thumbnail_url:thumbnail,
+
+file_type:fileType,
+
+user_name:
+currentUser.user_metadata.full_name,
+
+user_avatar:
+currentUser.user_metadata.avatar_url,
+
 user_id:currentUser.id
+
 }]);
 
 if(dbError){
@@ -346,12 +544,20 @@ return;
 progress.style.width = "100%";
 
 setTimeout(()=>{
+
 progress.style.width = "0%";
-document.getElementById("progressBox").style.display = "none";
+
+document.getElementById(
+"progressBox"
+).style.display = "none";
+
 },500);
 
 loadPosts();
+
 }
+
+/* 削除 */
 
 async function deletePost(id){
 
@@ -360,13 +566,16 @@ alert("ログインしてください");
 return;
 }
 
-const ok = confirm("この投稿を削除しますか？");
+const ok =
+confirm("この投稿を削除しますか？");
+
 if(!ok) return;
 
-const { error } = await client
+const { error } =
+await client
 .from("posts")
 .delete()
-.eq("id", id);
+.eq("id",id);
 
 if(error){
 alert(error.message);
@@ -374,29 +583,48 @@ return;
 }
 
 loadPosts();
+
 }
 
-async function downloadImage(url, filename){
+/* ダウンロード */
+
+async function downloadImage(url,filename){
+
 const res = await fetch(url);
+
 const blob = await res.blob();
 
-const blobUrl = window.URL.createObjectURL(blob);
+const blobUrl =
+window.URL.createObjectURL(blob);
 
-const a = document.createElement("a");
+const a =
+document.createElement("a");
+
 a.href = blobUrl;
 a.download = filename || "download";
+
 document.body.appendChild(a);
+
 a.click();
+
 a.remove();
 
 window.URL.revokeObjectURL(blobUrl);
+
 }
 
+/* 投稿取得 */
+
 async function loadPosts(){
-const { data, error } = await client
+
+const { data,error } =
+await client
 .from("posts")
 .select("*")
-.order("created_at",{ascending:false});
+.order(
+"created_at",
+{ascending:false}
+);
 
 if(error){
 console.log(error);
@@ -404,81 +632,114 @@ return;
 }
 
 renderPosts(data);
+
 }
+
+/* 描画 */
 
 function renderPosts(posts){
 
-const gallery = document.getElementById("gallery");
-const search = document.getElementById("search").value.toLowerCase();
+const gallery =
+document.getElementById("gallery");
+
+const search =
+document.getElementById("search")
+.value
+.toLowerCase();
 
 gallery.innerHTML = "";
 
-const filtered = posts.filter(post =>
-post.title.toLowerCase().includes(search)
+const filtered =
+posts.filter(post =>
+post.title
+.toLowerCase()
+.includes(search)
 );
 
 if(filtered.length === 0){
-gallery.innerHTML = `<div class="empty">投稿がありません</div>`;
+
+gallery.innerHTML =
+`<div class="empty">
+投稿がありません
+</div>`;
+
 return;
+
 }
 
 filtered.forEach(post=>{
 
-const isOwner = currentUser && post.user_id === currentUser.id;
-
-let thumbHTML = "";
-
-if(post.file_type === "image"){
-thumbHTML = `<img src="${post.image_url}">`;
-}
-else if(post.file_type === "text"){
-thumbHTML = `<div>TEXT FILE</div>`;
-}
-else if(post.file_type === "zip"){
-thumbHTML = `<div>ZIP FILE</div>`;
-}
-else{
-thumbHTML = `<div>FILE</div>`;
-}
+const isOwner =
+currentUser &&
+post.user_id === currentUser.id;
 
 gallery.innerHTML += `
+
 <div class="card">
 
 <div class="thumb">
-${thumbHTML}
+
+<img src="${
+post.thumbnail_url ||
+post.image_url
+}">
+
 </div>
 
 <div class="info">
+
 <h3>${post.title}</h3>
 
 <div class="user">
+
 <img src="${post.user_avatar}">
+
 <span>${post.user_name}</span>
+
 </div>
 
-<button class="downloadBtn"
-onclick="downloadImage('${post.image_url}','${post.title}')">
+<button
+class="downloadBtn"
+onclick="
+downloadImage(
+'${post.image_url}',
+'${post.title}'
+)
+">
 ダウンロード
 </button>
 
 ${isOwner ? `
-<button class="deleteBtn"
-onclick="deletePost('${post.id}')">
+
+<button
+class="deleteBtn"
+onclick="
+deletePost('${post.id}')
+">
 削除
 </button>
+
 ` : ""}
 
 </div>
+
 </div>
+
 `;
+
 });
+
 }
 
-document.getElementById("search").addEventListener("input",loadPosts);
+document
+.getElementById("search")
+.addEventListener(
+"input",
+loadPosts
+);
 
 loadPosts();
 
 </script>
-
 </body>
 </html>
