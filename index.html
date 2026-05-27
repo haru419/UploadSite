@@ -319,9 +319,9 @@ ${p.user_name}
 <div class="row">
 
 <button class="${isLiked?'liked':'like'}"
-onclick="toggleLike(${p.id})">❤️</button>
+onclick="toggleLike(${p.id})">いいね</button>
 
-<button onclick="downloadImage('${p.image_url}','${p.title}')">📥</button>
+<button onclick="downloadImage('${p.image_url}','${p.title}')">ダウンロード</button>
 
 ${isOwner ? `
 <button class="delete"
