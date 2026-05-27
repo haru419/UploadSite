@@ -3,96 +3,36 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SNS Home</title>
+<title>SNS Fix</title>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <style>
-body{
-margin:0;
-font-family:sans-serif;
-background:#0f172a;
-color:white;
-}
-
-header{
-display:flex;
-justify-content:space-between;
-padding:15px;
-background:#111827;
-position:sticky;
-top:0;
-}
-
-input{
-padding:10px;
-border:none;
-border-radius:10px;
-background:#1e293b;
-color:white;
-}
-
-button{
-padding:10px 14px;
-border:none;
-border-radius:10px;
-background:#5865f2;
-color:white;
-cursor:pointer;
-}
-
-.container{
-max-width:900px;
-margin:auto;
-padding:15px;
-}
-
-.upload{
-border:2px dashed #5865f2;
-padding:20px;
-border-radius:10px;
-margin:15px 0;
-}
-
-.card{
-background:#111827;
-padding:10px;
-margin-bottom:10px;
-border-radius:10px;
-}
-
-img{
-width:100%;
-border-radius:10px;
-}
-
-.row{
-display:flex;
-justify-content:space-between;
-margin-top:10px;
-}
-
-.name{
-color:#60a5fa;
-cursor:pointer;
-}
+body{margin:0;background:#0f172a;color:white;font-family:sans-serif;}
+header{display:flex;gap:10px;padding:15px;background:#111827;position:sticky;top:0;}
+button{padding:10px;border:none;border-radius:10px;background:#5865f2;color:white;cursor:pointer;}
+.container{max-width:900px;margin:auto;padding:15px;}
+.card{background:#111827;padding:10px;border-radius:10px;margin-bottom:10px;}
+img{width:100%;border-radius:10px;}
+.row{display:flex;justify-content:space-between;margin-top:10px;flex-wrap:wrap;gap:10px;}
+.name{color:#60a5fa;cursor:pointer;}
+.like{background:#ef4444;}
+.liked{background:#f97316;}
+.delete{background:#dc2626;}
 </style>
 </head>
 
 <body>
 
 <header>
-<input id="search" placeholder="検索">
-<button onclick="toggleUpload()">投稿</button>
 <button onclick="setMode('home')">ホーム</button>
 <button onclick="setMode('follow')">フォロー</button>
+<button onclick="toggleUpload()">投稿</button>
 </header>
 
 <div class="container">
 
-<div class="upload" id="uploadBox" style="display:none;">
-<input type="file" id="file">
-</div>
+<input type="file" id="file" style="margin-bottom:10px;">
 
 <div id="posts"></div>
 
@@ -105,25 +45,25 @@ const client = supabase.createClient(
 "sb_publishable_p1-D04hIexKwLQoprjW1Ww_PWyzW8Ra"
 );
 
-let user = null;
-let mode = "home";
-let following = [];
-let likes = [];
+let user=null;
+let mode="home";
+let following=[];
+let likes=[];
 
 async function init(){
 const { data:{session} } = await client.auth.getSession();
-user = session?.user || null;
+user=session?.user||null;
 
 loadFollow();
+loadLikes();
 loadPosts();
 }
 init();
 
-/* ===== upload ===== */
-document.getElementById("file").onchange = async (e)=>{
-
-const file = e.target.files[0];
-const name = Date.now()+file.name;
+/* ===== 投稿 ===== */
+document.getElementById("file").onchange=async(e)=>{
+const file=e.target.files[0];
+const name=Date.now()+file.name;
 
 await client.storage.from("uploads").upload(name,file);
 
@@ -144,10 +84,10 @@ async function loadPosts(){
 
 const { data } = await client.from("posts").select("*");
 
-let list = data;
+let list=data;
 
-if(mode==="follow" && user){
-list = data.filter(p=>following.includes(p.user_id));
+if(mode==="follow"&&user){
+list=list.filter(p=>following.includes(p.user_id));
 }
 
 render(list);
@@ -157,22 +97,76 @@ render(list);
 async function loadFollow(){
 if(!user) return;
 
-const { data } = await client
-.from("follows")
+const { data } = await client.from("follows")
 .select("following_id")
 .eq("follower_id",user.id);
 
-following = data.map(d=>d.following_id);
+following=data.map(d=>d.following_id);
+}
+
+/* ===== いいね ===== */
+async function loadLikes(){
+if(!user) return;
+
+const { data } = await client.from("likes")
+.select("*")
+.eq("user_id",user.id);
+
+likes=data;
+}
+
+/* ===== いいね ===== */
+async function toggleLike(id){
+
+const exist=likes.find(l=>l.post_id===id);
+
+if(exist){
+await client.from("likes")
+.delete()
+.eq("user_id",user.id)
+.eq("post_id",id);
+}else{
+await client.from("likes")
+.insert({user_id:user.id,post_id:id});
+}
+
+loadLikes();
+loadPosts();
+}
+
+/* ===== 削除 ===== */
+async function deletePost(id){
+await client.from("posts")
+.delete()
+.eq("id",id);
+
+loadPosts();
+}
+
+/* ===== DL ===== */
+async function download(url,name){
+
+const r=await fetch(url);
+const b=await r.blob();
+
+const a=document.createElement("a");
+a.href=URL.createObjectURL(b);
+a.download=name;
+a.click();
 }
 
 /* ===== UI ===== */
 function render(list){
 
-const box = document.getElementById("posts");
-box.innerHTML = "";
+const box=document.getElementById("posts");
+box.innerHTML="";
 
 list.forEach(p=>{
-box.innerHTML += `
+
+const isLike=likes.some(l=>l.post_id===p.id);
+const isOwner=user&&user.id===p.user_id;
+
+box.innerHTML+=`
 <div class="card">
 
 <img src="${p.image_url}">
@@ -186,14 +180,26 @@ ${p.user_name}
 </div>
 </div>
 
+<div class="row">
+
+<button class="${isLike?'liked':'like'}"
+onclick="toggleLike(${p.id})">❤️</button>
+
+<button onclick="download('${p.image_url}','${p.title}')">📥</button>
+
+${isOwner?`
+<button class="delete" onclick="deletePost(${p.id})">削除</button>
+`:''}
+
+</div>
+
 </div>
 `;
 });
 }
 
-/* ===== プロフ ===== */
 function openProfile(uid){
-location.href = `profile.html?uid=${uid}`;
+location.href=`profile.html?uid=${uid}`;
 }
 
 function setMode(m){
@@ -202,9 +208,7 @@ loadPosts();
 }
 
 function toggleUpload(){
-document.getElementById("uploadBox").style.display =
-document.getElementById("uploadBox").style.display==="none"
-? "block":"none";
+document.getElementById("file").click();
 }
 
 </script>
