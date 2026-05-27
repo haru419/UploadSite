@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Profile</title>
+<title>SNS Home</title>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
@@ -13,37 +13,19 @@ margin:0;
 font-family:sans-serif;
 background:#0f172a;
 color:white;
-padding:20px;
 }
 
-.container{
-max-width:800px;
-margin:auto;
-}
-
-.card{
-background:#111827;
-padding:15px;
-border-radius:15px;
-}
-
-.profile{
+header{
 display:flex;
-gap:15px;
-align-items:center;
-margin-bottom:15px;
+justify-content:space-between;
+padding:15px;
+background:#111827;
+position:sticky;
+top:0;
 }
 
-.profile img{
-width:80px;
-height:80px;
-border-radius:50%;
-}
-
-textarea{
-width:100%;
+input{
 padding:10px;
-margin-top:10px;
 border:none;
 border-radius:10px;
 background:#1e293b;
@@ -51,214 +33,178 @@ color:white;
 }
 
 button{
-padding:10px 15px;
+padding:10px 14px;
 border:none;
 border-radius:10px;
-cursor:pointer;
-margin-top:10px;
 background:#5865f2;
 color:white;
-transition:.2s;
+cursor:pointer;
 }
 
-button:hover{transform:scale(1.05);}
-
-.follow{background:#22c55e;}
-.unfollow{background:#ef4444;}
-
-.grid{
-display:grid;
-grid-template-columns:repeat(auto-fill,minmax(180px,1fr));
-gap:10px;
-margin-top:15px;
+.container{
+max-width:900px;
+margin:auto;
+padding:15px;
 }
 
-.post{
-width:100%;
-height:150px;
-object-fit:cover;
+.upload{
+border:2px dashed #5865f2;
+padding:20px;
+border-radius:10px;
+margin:15px 0;
+}
+
+.card{
+background:#111827;
+padding:10px;
+margin-bottom:10px;
 border-radius:10px;
 }
 
-.small{
-opacity:.7;
-font-size:13px;
+img{
+width:100%;
+border-radius:10px;
+}
+
+.row{
+display:flex;
+justify-content:space-between;
+margin-top:10px;
+}
+
+.name{
+color:#60a5fa;
+cursor:pointer;
 }
 </style>
 </head>
 
 <body>
 
+<header>
+<input id="search" placeholder="検索">
+<button onclick="toggleUpload()">投稿</button>
+<button onclick="setMode('home')">ホーム</button>
+<button onclick="setMode('follow')">フォロー</button>
+</header>
+
 <div class="container">
 
-<div class="card">
-
-<div class="profile">
-<img id="avatar">
-<div>
-<h2 id="name"></h2>
-<div class="small" id="followState"></div>
-</div>
+<div class="upload" id="uploadBox" style="display:none;">
+<input type="file" id="file">
 </div>
 
-<textarea id="bio" placeholder="自己紹介"></textarea>
-
-<button onclick="saveBio()">プロフィール保存</button>
-
-<div id="followArea"></div>
-
-</div>
-
-<div class="grid" id="posts"></div>
+<div id="posts"></div>
 
 </div>
 
 <script>
 
-const supabaseUrl = "https://dnzxeiukhdcysqxtvcab.supabase.co";
-const supabaseKey = "sb_publishable_p1-D04hIexKwLQoprjW1Ww_PWyzW8Ra";
+const client = supabase.createClient(
+"https://dnzxeiukhdcysqxtvcab.supabase.co",
+"sb_publishable_p1-D04hIexKwLQoprjW1Ww_PWyzW8Ra"
+);
 
-const client = supabase.createClient(supabaseUrl, supabaseKey);
+let user = null;
+let mode = "home";
+let following = [];
+let likes = [];
 
-const uid = new URLSearchParams(location.search).get("uid");
-
-let me = null;
-
-/* ================= INIT ================= */
 async function init(){
-
-if(!uid){
-document.body.innerHTML = "<h2>ユーザーが指定されていません</h2>";
-return;
-}
-
 const { data:{session} } = await client.auth.getSession();
-me = session?.user || null;
+user = session?.user || null;
 
-await loadProfile();
-await loadFollow();
-await loadPosts();
+loadFollow();
+loadPosts();
 }
 init();
 
-/* ================= PROFILE ================= */
-async function loadProfile(){
+/* ===== upload ===== */
+document.getElementById("file").onchange = async (e)=>{
 
-const { data, error } = await client
-.from("profiles")
-.select("*")
-.eq("id", uid)
-.single();
+const file = e.target.files[0];
+const name = Date.now()+file.name;
 
-if(error || !data){
-document.body.innerHTML = "<h2>プロフィールが見つかりません</h2>";
-return;
-}
+await client.storage.from("uploads").upload(name,file);
 
-document.getElementById("name").innerText =
-data.full_name || "名無し";
+const { data } = client.storage.from("uploads").getPublicUrl(name);
 
-document.getElementById("avatar").src =
-data.avatar_url || "https://via.placeholder.com/80";
-
-document.getElementById("bio").value =
-data.bio || "";
-
-/* 自分かどうか表示 */
-document.getElementById("followState").innerText =
-(me && me.id === uid) ? "あなたのプロフィール" : "";
-}
-
-/* ================= BIO ================= */
-async function saveBio(){
-
-if(!me || me.id !== uid){
-alert("自分のプロフィールのみ編集できます");
-return;
-}
-
-await client.from("profiles")
-.upsert({
-id: me.id,
-bio: document.getElementById("bio").value
+await client.from("posts").insert({
+title:file.name,
+image_url:data.publicUrl,
+user_id:user.id,
+user_name:user.user_metadata.full_name
 });
 
-loadProfile();
+loadPosts();
+};
+
+/* ===== 投稿取得 ===== */
+async function loadPosts(){
+
+const { data } = await client.from("posts").select("*");
+
+let list = data;
+
+if(mode==="follow" && user){
+list = data.filter(p=>following.includes(p.user_id));
 }
 
-/* ================= FOLLOW ================= */
-async function follow(){
-
-if(!me) return alert("ログインしてください");
-
-await client.from("follows")
-.insert({
-follower_id: me.id,
-following_id: uid
-});
-
-loadFollow();
+render(list);
 }
 
-async function unfollow(){
-
-await client.from("follows")
-.delete()
-.eq("follower_id", me.id)
-.eq("following_id", uid);
-
-loadFollow();
-}
-
+/* ===== フォロー ===== */
 async function loadFollow(){
-
-const box = document.getElementById("followArea");
-
-if(!me){
-box.innerHTML = "ログインしてください";
-return;
-}
-
-if(me.id === uid){
-box.innerHTML = "自分のプロフィールです";
-return;
-}
+if(!user) return;
 
 const { data } = await client
 .from("follows")
-.select("*")
-.eq("follower_id", me.id)
-.eq("following_id", uid);
+.select("following_id")
+.eq("follower_id",user.id);
 
-const isFollowing = data && data.length > 0;
-
-box.innerHTML = isFollowing
-? `<button class="unfollow" onclick="unfollow()">フォロー解除</button>`
-: `<button class="follow" onclick="follow()">フォローする</button>`;
+following = data.map(d=>d.following_id);
 }
 
-/* ================= POSTS ================= */
-async function loadPosts(){
-
-const { data } = await client
-.from("posts")
-.select("*")
-.eq("user_id", uid)
-.order("created_at",{ascending:false});
+/* ===== UI ===== */
+function render(list){
 
 const box = document.getElementById("posts");
 box.innerHTML = "";
 
-if(!data || data.length === 0){
-box.innerHTML = "<p>投稿がありません</p>";
-return;
-}
-
-data.forEach(p=>{
+list.forEach(p=>{
 box.innerHTML += `
-<img class="post" src="${p.image_url}">
+<div class="card">
+
+<img src="${p.image_url}">
+
+<div class="row">
+<div>
+<div>${p.title}</div>
+<div class="name" onclick="openProfile('${p.user_id}')">
+${p.user_name}
+</div>
+</div>
+</div>
+
+</div>
 `;
 });
+}
+
+/* ===== プロフ ===== */
+function openProfile(uid){
+location.href = `profile.html?uid=${uid}`;
+}
+
+function setMode(m){
+mode=m;
+loadPosts();
+}
+
+function toggleUpload(){
+document.getElementById("uploadBox").style.display =
+document.getElementById("uploadBox").style.display==="none"
+? "block":"none";
 }
 
 </script>
