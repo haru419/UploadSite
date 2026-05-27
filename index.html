@@ -40,7 +40,7 @@ height:80px;
 border-radius:50%;
 }
 
-input, textarea{
+textarea{
 width:100%;
 padding:10px;
 margin-top:10px;
@@ -97,7 +97,7 @@ font-size:13px;
 <img id="avatar">
 <div>
 <h2 id="name"></h2>
-<div class="small" id="followers"></div>
+<div class="small" id="followState"></div>
 </div>
 </div>
 
@@ -124,19 +124,24 @@ const uid = new URLSearchParams(location.search).get("uid");
 
 let me = null;
 
-/* ===== init ===== */
+/* ================= INIT ================= */
 async function init(){
 
+if(!uid){
+document.body.innerHTML = "<h2>ユーザーが指定されていません</h2>";
+return;
+}
+
 const { data:{session} } = await client.auth.getSession();
-if(session) me = session.user;
+me = session?.user || null;
 
 await loadProfile();
-await loadPosts();
 await loadFollow();
+await loadPosts();
 }
 init();
 
-/* ===== プロフィール取得（ここが重要） ===== */
+/* ================= PROFILE ================= */
 async function loadProfile(){
 
 const { data, error } = await client
@@ -145,8 +150,8 @@ const { data, error } = await client
 .eq("id", uid)
 .single();
 
-if(error){
-console.log(error);
+if(error || !data){
+document.body.innerHTML = "<h2>プロフィールが見つかりません</h2>";
 return;
 }
 
@@ -158,9 +163,13 @@ data.avatar_url || "https://via.placeholder.com/80";
 
 document.getElementById("bio").value =
 data.bio || "";
+
+/* 自分かどうか表示 */
+document.getElementById("followState").innerText =
+(me && me.id === uid) ? "あなたのプロフィール" : "";
 }
 
-/* ===== bio保存（自分だけ） ===== */
+/* ================= BIO ================= */
 async function saveBio(){
 
 if(!me || me.id !== uid){
@@ -177,8 +186,10 @@ bio: document.getElementById("bio").value
 loadProfile();
 }
 
-/* ===== フォロー処理 ===== */
+/* ================= FOLLOW ================= */
 async function follow(){
+
+if(!me) return alert("ログインしてください");
 
 await client.from("follows")
 .insert({
@@ -199,18 +210,17 @@ await client.from("follows")
 loadFollow();
 }
 
-/* ===== フォロー状態 ===== */
 async function loadFollow(){
 
+const box = document.getElementById("followArea");
+
 if(!me){
-document.getElementById("followArea").innerHTML =
-"ログインしてください";
+box.innerHTML = "ログインしてください";
 return;
 }
 
 if(me.id === uid){
-document.getElementById("followArea").innerHTML =
-"これはあなたのプロフィールです";
+box.innerHTML = "自分のプロフィールです";
 return;
 }
 
@@ -220,15 +230,14 @@ const { data } = await client
 .eq("follower_id", me.id)
 .eq("following_id", uid);
 
-const isFollowing = data.length > 0;
+const isFollowing = data && data.length > 0;
 
-document.getElementById("followArea").innerHTML =
-isFollowing
+box.innerHTML = isFollowing
 ? `<button class="unfollow" onclick="unfollow()">フォロー解除</button>`
 : `<button class="follow" onclick="follow()">フォローする</button>`;
 }
 
-/* ===== 投稿取得 ===== */
+/* ================= POSTS ================= */
 async function loadPosts(){
 
 const { data } = await client
