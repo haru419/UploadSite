@@ -141,6 +141,24 @@ height:35px;
 border-radius:50%;
 }
 
+.downloadBtn{
+display:block;
+margin-top:15px;
+padding:12px;
+text-align:center;
+background:#2563eb;
+border-radius:12px;
+color:white;
+text-decoration:none;
+transition:.2s;
+font-weight:bold;
+}
+
+.downloadBtn:hover{
+transform:scale(1.03);
+background:#3b82f6;
+}
+
 .empty{
 opacity:.6;
 text-align:center;
@@ -226,7 +244,7 @@ const supabaseUrl =
 "https://dnzxeiukhdcysqxtvcab.supabase.co";
 
 const supabaseKey =
-"sb_publishable_p1-D04hIexKwLQoprjW1Ww_PWyzW8Ra";
+"ここにPublishableKey";
 
 const client =
 window.supabase.createClient(
@@ -498,7 +516,14 @@ gallery.innerHTML += `
 
 <div class="card">
 
+<a
+href="${post.image_url}"
+target="_blank"
+>
+
 <img src="${post.image_url}">
+
+</a>
 
 <div class="info">
 
@@ -511,6 +536,15 @@ gallery.innerHTML += `
 <span>${post.user_name}</span>
 
 </div>
+
+<a
+href="${post.image_url}"
+download
+target="_blank"
+class="downloadBtn"
+>
+ダウンロード
+</a>
 
 </div>
 
