@@ -3,484 +3,272 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-<title>UploadSite</title>
-
-<link rel="icon" href="data:,">
+<title>Profile</title>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <style>
-*{
-margin:0;
-padding:0;
-box-sizing:border-box;
-font-family:sans-serif;
-}
-
 body{
+margin:0;
+font-family:sans-serif;
 background:#0f172a;
 color:white;
-min-height:100vh;
 padding:20px;
 }
 
-header{
-display:flex;
-justify-content:space-between;
-align-items:center;
-margin-bottom:20px;
-gap:10px;
-flex-wrap:wrap;
+.container{
+max-width:800px;
+margin:auto;
 }
 
-h1{font-size:32px;}
-
-.top-right{
+.profile{
 display:flex;
-gap:10px;
+gap:15px;
 align-items:center;
-flex-wrap:wrap;
+margin-bottom:20px;
+}
+
+.profile img{
+width:90px;
+height:90px;
+border-radius:50%;
+cursor:pointer;
+border:2px solid #5865f2;
+}
+
+input, textarea{
+width:100%;
+padding:10px;
+margin-top:10px;
+border:none;
+border-radius:10px;
+background:#1e293b;
+color:white;
 }
 
 button{
+padding:10px 15px;
 border:none;
-padding:12px 18px;
-border-radius:12px;
+border-radius:10px;
+cursor:pointer;
+margin-top:10px;
 background:#5865f2;
 color:white;
-cursor:pointer;
-font-size:15px;
 transition:.2s;
 }
 
 button:hover{transform:scale(1.05);}
 
-input{
-padding:12px;
-border:none;
-border-radius:12px;
-background:#1e293b;
-color:white;
-width:250px;
+.follow{
+background:#22c55e;
 }
 
-#drop{
-border:3px dashed #5865f2;
-border-radius:20px;
-padding:50px;
-text-align:center;
-margin-bottom:20px;
-transition:.2s;
-background:#111827;
-cursor:pointer;
-}
-
-#drop.drag{
-background:#1e293b;
-transform:scale(1.01);
-}
-
-#progressBox{
-width:100%;
-height:20px;
-background:#1e293b;
-border-radius:999px;
-overflow:hidden;
-margin-top:20px;
-display:none;
-}
-
-#progress{
-height:100%;
-width:0%;
-background:#5865f2;
-transition:.2s;
-}
-
-#gallery{
-display:grid;
-grid-template-columns:repeat(auto-fill,minmax(250px,1fr));
-gap:20px;
-margin-top:20px;
-}
-
-.card{
-background:#111827;
-border-radius:20px;
-overflow:hidden;
-box-shadow:0 0 20px rgba(0,0,0,.3);
-animation:fade .3s;
-}
-
-.card img{
-width:100%;
-height:220px;
-object-fit:cover;
-display:block;
-}
-
-.info{padding:15px;}
-
-.user{
-display:flex;
-align-items:center;
-gap:10px;
-margin-top:10px;
-}
-
-.user img{
-width:35px;
-height:35px;
-border-radius:50%;
-}
-
-.downloadBtn{
-display:block;
-margin-top:15px;
-padding:12px;
-text-align:center;
-background:#2563eb;
-border-radius:12px;
-color:white;
-font-weight:bold;
-cursor:pointer;
-border:none;
-width:100%;
-transition:.2s;
-}
-
-.downloadBtn:hover{
-transform:scale(1.03);
-background:#3b82f6;
-}
-
-.deleteBtn{
-display:block;
-margin-top:10px;
-padding:12px;
-text-align:center;
+.unfollow{
 background:#ef4444;
-border-radius:12px;
-color:white;
-font-weight:bold;
-cursor:pointer;
-border:none;
+}
+
+.grid{
+display:grid;
+grid-template-columns:repeat(auto-fill,minmax(180px,1fr));
+gap:10px;
+margin-top:20px;
+}
+
+.post{
 width:100%;
-transition:.2s;
+height:160px;
+object-fit:cover;
+border-radius:10px;
 }
 
-.deleteBtn:hover{
-transform:scale(1.03);
-background:#ff5555;
-}
-
-.empty{
-opacity:.6;
-text-align:center;
-padding:50px;
-}
-
-@keyframes fade{
-from{opacity:0;transform:translateY(10px);}
-to{opacity:1;transform:none;}
-}
-
-@media(max-width:600px){
-input{width:100%;}
-header{flex-direction:column;align-items:stretch;}
-.top-right{flex-direction:column;}
+.small{
+opacity:.7;
+font-size:14px;
+margin-top:5px;
 }
 </style>
 </head>
 
 <body>
 
-<header>
-<h1>UploadSite</h1>
+<div class="container">
 
-<div class="top-right">
-<input type="text" id="search" placeholder="検索">
+<div class="profile">
+<img id="avatar" onclick="changeAvatar()">
+<div style="flex:1">
+<h2 id="name"></h2>
 
-<button id="myPostsBtn">マイ投稿</button>
-<button id="loginBtn">Discordログイン</button>
-</div>
-</header>
+<div class="small" id="followCount"></div>
 
-<div id="drop">
-<h2>ドラッグ&ドロップ</h2>
-<p>またはクリックして画像を選択</p>
+<textarea id="bio"></textarea>
 
-<input type="file" id="fileInput" hidden accept="image/*">
+<button onclick="saveBio()">プロフィール保存</button>
 
-<div id="progressBox">
-<div id="progress"></div>
+<div id="followArea"></div>
 </div>
 </div>
 
-<div id="gallery"></div>
+<div class="grid" id="posts"></div>
+
+</div>
 
 <script>
 
 const supabaseUrl = "https://dnzxeiukhdcysqxtvcab.supabase.co";
 const supabaseKey = "sb_publishable_p1-D04hIexKwLQoprjW1Ww_PWyzW8Ra";
 
-const client = window.supabase.createClient(supabaseUrl, supabaseKey);
+const client = supabase.createClient(supabaseUrl, supabaseKey);
 
-let currentUser = null;
-let showOnlyMine = false;
+const uid = new URLSearchParams(location.search).get("uid");
 
-/* ===== ログインチェック ===== */
-async function checkUser(){
+let me = null;
+
+/* ===== 初期化 ===== */
+async function init(){
+
 const { data:{session} } = await client.auth.getSession();
+if(session) me = session.user;
 
-if(session){
-currentUser = session.user;
-document.getElementById("loginBtn").innerText =
-session.user.user_metadata.full_name;
+await loadProfile();
+await loadPosts();
+await loadFollow();
 }
+
+/* ===== プロフィール取得 ===== */
+async function loadProfile(){
+
+const { data } = await client
+.from("profiles")
+.select("*")
+.eq("id", uid)
+.single();
+
+document.getElementById("name").innerText =
+data.full_name || "名無し";
+
+document.getElementById("avatar").src =
+data.avatar_url || "https://via.placeholder.com/80";
+
+document.getElementById("bio").value =
+data.bio || "";
 }
-checkUser();
 
-/* ===== ログイン状態更新 ===== */
-client.auth.onAuthStateChange((event,session)=>{
-if(session){
-currentUser = session.user;
-document.getElementById("loginBtn").innerText =
-session.user.user_metadata.full_name;
-}
-});
+/* ===== bio保存 ===== */
+async function saveBio(){
 
-/* ===== ログイン ===== */
-document.getElementById("loginBtn").onclick = async ()=>{
-await client.auth.signInWithOAuth({
-provider:"discord",
-options:{
-redirectTo:"https://haru419.github.io/UploadSite/"
-}
-});
-};
-
-/* ===== マイ投稿切り替え ===== */
-document.getElementById("myPostsBtn").onclick = ()=>{
-showOnlyMine = !showOnlyMine;
-
-document.getElementById("myPostsBtn").innerText =
-showOnlyMine ? "全て表示" : "マイ投稿";
-
-loadPosts();
-};
-
-/* ===== ドラッグUI ===== */
-const drop = document.getElementById("drop");
-const fileInput = document.getElementById("fileInput");
-
-drop.onclick = ()=> fileInput.click();
-
-drop.addEventListener("dragover",(e)=>{
-e.preventDefault();
-drop.classList.add("drag");
-});
-
-drop.addEventListener("dragleave",()=>{
-drop.classList.remove("drag");
-});
-
-drop.addEventListener("drop",(e)=>{
-e.preventDefault();
-drop.classList.remove("drag");
-uploadFile(e.dataTransfer.files[0]);
-});
-
-fileInput.addEventListener("change",(e)=>{
-uploadFile(e.target.files[0]);
-});
-
-/* ===== アップロード ===== */
-async function uploadFile(file){
-
-if(!currentUser){
-alert("Discordログインしてください");
+if(!me || me.id !== uid){
+alert("自分のプロフィールのみ編集できます");
 return;
 }
 
-const ext = file.name.split(".").pop();
-const fileName = Date.now() + "." + ext;
+await client.from("profiles")
+.upsert({
+id: me.id,
+bio: document.getElementById("bio").value
+});
 
-document.getElementById("progressBox").style.display = "block";
-const progress = document.getElementById("progress");
+loadProfile();
+}
 
-progress.style.width = "20%";
+/* ===== アイコン変更 ===== */
+async function changeAvatar(){
 
-const { error:uploadError } = await client.storage
-.from("uploads")
-.upload(fileName,file);
-
-if(uploadError){
-alert(uploadError.message);
+if(!me || me.id !== uid){
+alert("自分のみ変更できます");
 return;
 }
 
-progress.style.width = "70%";
+const url = prompt("新しいアイコンURLを入力");
 
-const { data:urlData } = client.storage
-.from("uploads")
-.getPublicUrl(fileName);
+if(!url) return;
 
-const imageUrl = urlData.publicUrl;
+await client.from("profiles")
+.upsert({
+id: me.id,
+avatar_url: url
+});
 
-progress.style.width = "90%";
-
-const { error:dbError } = await client
-.from("posts")
-.insert([{
-title:file.name,
-image_url:imageUrl,
-user_name:currentUser.user_metadata.full_name,
-user_avatar:currentUser.user_metadata.avatar_url,
-user_id:currentUser.id
-}]);
-
-if(dbError){
-alert(dbError.message);
-return;
+loadProfile();
 }
 
-progress.style.width = "100%";
+/* ===== フォロー ===== */
+async function follow(){
 
-setTimeout(()=>{
-progress.style.width = "0%";
-document.getElementById("progressBox").style.display = "none";
-},500);
+await client.from("follows").insert({
+follower_id: me.id,
+following_id: uid
+});
 
-loadPosts();
+loadFollow();
 }
 
-/* ===== 削除 ===== */
-async function deletePost(id){
+async function unfollow(){
 
-if(!currentUser){
-alert("ログインしてください");
-return;
-}
-
-const ok = confirm("この投稿を削除しますか？");
-if(!ok) return;
-
-const { error } = await client
-.from("posts")
+await client.from("follows")
 .delete()
-.eq("id", id);
+.eq("follower_id", me.id)
+.eq("following_id", uid);
 
-if(error){
-alert(error.message);
+loadFollow();
+}
+
+/* ===== フォロー状態 ===== */
+async function loadFollow(){
+
+const { data } = await client
+.from("follows")
+.select("*")
+.eq("following_id", uid);
+
+const isFollowing =
+data?.some(f => f.follower_id === me?.id);
+
+const area = document.getElementById("followArea");
+
+if(me?.id === uid){
+area.innerHTML = "<b>あなたのプロフィール</b>";
 return;
 }
 
-loadPosts();
+area.innerHTML = isFollowing
+? `<button class="unfollow" onclick="unfollow()">フォロー解除</button>`
+: `<button class="follow" onclick="follow()">フォローする</button>`;
 }
 
-/* ===== ダウンロード ===== */
-async function downloadImage(url, filename){
+/* ===== フォロー数 ===== */
+async function loadFollowCount(){
 
-const res = await fetch(url);
-const blob = await res.blob();
+const { data } = await client
+.from("follows")
+.select("*")
+.eq("following_id", uid);
 
-const blobUrl = window.URL.createObjectURL(blob);
-
-const a = document.createElement("a");
-a.href = blobUrl;
-a.download = filename || "download.jpg";
-document.body.appendChild(a);
-a.click();
-a.remove();
-
-window.URL.revokeObjectURL(blobUrl);
+document.getElementById("followCount").innerText =
+`フォロワー: ${data.length}`;
 }
 
-/* ===== 投稿取得 ===== */
+/* ===== 投稿 ===== */
 async function loadPosts(){
 
-const { data, error } = await client
+const { data } = await client
 .from("posts")
 .select("*")
+.eq("user_id", uid)
 .order("created_at",{ascending:false});
 
-if(error){
-console.log(error);
-return;
-}
+const box = document.getElementById("posts");
+box.innerHTML = "";
 
-let posts = data;
-
-/* マイ投稿フィルター */
-if(showOnlyMine && currentUser){
-posts = posts.filter(post =>
-post.user_id === currentUser.id
-);
-}
-
-renderPosts(posts);
-}
-
-/* ===== 表示 ===== */
-function renderPosts(posts){
-
-const gallery = document.getElementById("gallery");
-const search = document.getElementById("search").value.toLowerCase();
-
-gallery.innerHTML = "";
-
-const filtered = posts.filter(post =>
-post.title.toLowerCase().includes(search)
-);
-
-if(filtered.length === 0){
-gallery.innerHTML = `<div class="empty">投稿がありません</div>`;
-return;
-}
-
-filtered.forEach(post=>{
-
-const isOwner = currentUser && post.user_id === currentUser.id;
-
-gallery.innerHTML += `
-<div class="card">
-
-<a href="${post.image_url}" target="_blank">
-<img src="${post.image_url}">
-</a>
-
-<div class="info">
-
-<h3>${post.title}</h3>
-
-<div class="user">
-<img src="${post.user_avatar}">
-<span>${post.user_name}</span>
-</div>
-
-<button class="downloadBtn"
-onclick="downloadImage('${post.image_url}','${post.title}')">
-ダウンロード
-</button>
-
-${isOwner ? `
-<button class="deleteBtn"
-onclick="deletePost('${post.id}')">
-削除
-</button>
-` : ""}
-
-</div>
-</div>
+data.forEach(p=>{
+box.innerHTML += `
+<img class="post" src="${p.image_url}">
 `;
 });
 }
 
-document.getElementById("search").addEventListener("input",loadPosts);
+init();
 
-loadPosts();
+loadFollowCount();
 
 </script>
 
