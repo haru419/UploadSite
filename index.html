@@ -45,12 +45,16 @@ transition:.2s;
 
 button:hover{transform:scale(1.05);}
 
+.grid{
+max-width:900px;
+margin:auto;
+}
+
 .card{
 background:#111827;
 border-radius:15px;
-overflow:hidden;
-margin-bottom:15px;
 padding:10px;
+margin-bottom:15px;
 }
 
 img{
@@ -63,24 +67,17 @@ display:flex;
 justify-content:space-between;
 align-items:center;
 margin-top:10px;
+gap:10px;
+flex-wrap:wrap;
 }
 
-.like{
-background:#ef4444;
-}
-
-.liked{
-background:#f97316;
-}
+.like{background:#ef4444;}
+.liked{background:#f97316;}
+.delete{background:#dc2626;}
 
 .small{
 opacity:.7;
-font-size:14px;
-}
-
-.grid{
-max-width:800px;
-margin:auto;
+font-size:13px;
 }
 </style>
 </head>
@@ -89,7 +86,9 @@ margin:auto;
 
 <header>
 <input id="search" placeholder="検索">
-<button onclick="toggleMyLikes()">❤️ いいね一覧</button>
+
+<button onclick="toggleMyLikes()">❤️いいね一覧</button>
+<button onclick="toggleMyPosts()">📌マイ投稿</button>
 <button id="loginBtn">ログイン</button>
 </header>
 
@@ -104,17 +103,17 @@ const client = supabase.createClient(supabaseUrl, supabaseKey);
 
 let user = null;
 let showLikesOnly = false;
+let showMineOnly = false;
 
-/* ===== login ===== */
+/* ===== ログイン ===== */
 async function init(){
 const { data:{session} } = await client.auth.getSession();
 if(session) user = session.user;
-
 loadPosts();
 }
 init();
 
-/* ===== login button ===== */
+/* ===== ログインボタン ===== */
 document.getElementById("loginBtn").onclick = async ()=>{
 await client.auth.signInWithOAuth({
 provider:"discord",
@@ -122,7 +121,19 @@ options:{redirectTo:location.href}
 });
 };
 
-/* ===== like toggle ===== */
+/* ===== マイ投稿 ===== */
+function toggleMyPosts(){
+showMineOnly = !showMineOnly;
+loadPosts();
+}
+
+/* ===== いいね一覧 ===== */
+function toggleMyLikes(){
+showLikesOnly = !showLikesOnly;
+loadPosts();
+}
+
+/* ===== いいね ===== */
 async function toggleLike(postId){
 
 if(!user) return alert("ログインしてください");
@@ -136,16 +147,14 @@ const { data } = await client
 
 if(data){
 
-await client
-.from("likes")
+await client.from("likes")
 .delete()
 .eq("user_id", user.id)
 .eq("post_id", postId);
 
 }else{
 
-await client
-.from("likes")
+await client.from("likes")
 .insert({
 user_id:user.id,
 post_id:postId
@@ -155,9 +164,33 @@ post_id:postId
 loadPosts();
 }
 
-/* ===== いいね一覧切替 ===== */
-function toggleMyLikes(){
-showLikesOnly = !showLikesOnly;
+/* ===== ダウンロード ===== */
+async function downloadImage(url, filename){
+
+const res = await fetch(url);
+const blob = await res.blob();
+
+const blobUrl = URL.createObjectURL(blob);
+
+const a = document.createElement("a");
+a.href = blobUrl;
+a.download = filename || "image.jpg";
+document.body.appendChild(a);
+a.click();
+a.remove();
+
+URL.revokeObjectURL(blobUrl);
+}
+
+/* ===== 削除 ===== */
+async function deletePost(id){
+
+if(!user) return alert("ログインしてください");
+
+await client.from("posts")
+.delete()
+.eq("id", id);
+
 loadPosts();
 }
 
@@ -175,10 +208,15 @@ const { data:likes } = user
 
 let filtered = posts;
 
-/* いいねフィルター */
+/* マイ投稿 */
+if(showMineOnly && user){
+filtered = filtered.filter(p => p.user_id === user.id);
+}
+
+/* いいね投稿 */
 if(showLikesOnly && user){
-const likedIds = likes.map(l=>l.post_id);
-filtered = posts.filter(p => likedIds.includes(p.id));
+const ids = likes.map(l=>l.post_id);
+filtered = filtered.filter(p => ids.includes(p.id));
 }
 
 render(filtered, likes);
@@ -193,7 +231,7 @@ box.innerHTML = "";
 posts.forEach(p=>{
 
 const isLiked = likes?.some(l=>l.post_id === p.id);
-const likeCount = likes?.filter(l=>l.post_id === p.id).length || 0;
+const isOwner = user && p.user_id === user.id;
 
 box.innerHTML += `
 <div class="card">
@@ -201,15 +239,31 @@ box.innerHTML += `
 <img src="${p.image_url}">
 
 <div class="row">
+
 <div>
 <div>${p.title}</div>
 <div class="small">${p.user_name}</div>
 </div>
 
+</div>
+
+<div class="row">
+
 <button class="${isLiked ? 'liked':'like'}"
 onclick="toggleLike(${p.id})">
-❤️ ${isLiked ? 'Liked' : 'Like'}
+❤️
 </button>
+
+<button onclick="downloadImage('${p.image_url}','${p.title}')">
+📥DL
+</button>
+
+${isOwner ? `
+<button class="delete"
+onclick="deletePost(${p.id})">
+削除
+</button>
+` : ""}
 
 </div>
 
@@ -218,7 +272,7 @@ onclick="toggleLike(${p.id})">
 });
 }
 
-/* search */
+/* 検索 */
 document.getElementById("search").addEventListener("input",loadPosts);
 
 </script>
